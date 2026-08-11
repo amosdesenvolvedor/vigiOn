@@ -131,11 +131,12 @@ enum PlanStatus {
 }
 
 enum SubscriptionStatus {
-  TRIAL
+  TRIALING
   ACTIVE
   PAST_DUE
   CANCELED
   EXPIRED
+  SUSPENDED
 }
 
 enum OneTimeTokenType {
@@ -144,26 +145,29 @@ enum OneTimeTokenType {
 }
 
 model Organization {
-  id            String                   @id @default(uuid()) @db.Char(36)
-  name          String                   @db.VarChar(160)
-  slug          String                   @unique @db.VarChar(100)
-  status        OrganizationStatus       @default(ACTIVE)
-  timezone      String                   @default("UTC") @db.VarChar(64)
-  deletedAt     DateTime?                @db.DateTime(3)
-  createdAt     DateTime                 @default(now()) @db.DateTime(3)
-  updatedAt     DateTime                 @updatedAt @db.DateTime(3)
-  customer      CustomerProfile?
-  users         User[]
-  memberships   OrganizationMembership[]
-  invitations   OrganizationInvitation[]
-  settings      OrganizationSettings?
-  cameras       Camera[]
-  events        CameraEvent[]
-  notifications Notification[]
-  storageFiles  StorageFile[]
-  subscriptions Subscription[]
-  storageUsage  StorageUsage?
-  auditLogs     AuditLog[]
+  id                  String                   @id @default(uuid()) @db.Char(36)
+  name                String                   @db.VarChar(160)
+  slug                String                   @unique @db.VarChar(100)
+  status              OrganizationStatus       @default(ACTIVE)
+  timezone            String                   @default("UTC") @db.VarChar(64)
+  deletedAt           DateTime?                @db.DateTime(3)
+  createdAt           DateTime                 @default(now()) @db.DateTime(3)
+  updatedAt           DateTime                 @updatedAt @db.DateTime(3)
+  customer            CustomerProfile?
+  users               User[]
+  memberships         OrganizationMembership[]
+  invitations         OrganizationInvitation[]
+  settings            OrganizationSettings?
+  cameras             Camera[]
+  events              CameraEvent[]
+  notifications       Notification[]
+  storageFiles        StorageFile[]
+  subscriptions       Subscription[]
+  subscriptionHistory SubscriptionHistory[]
+  storageUsage        StorageUsage?
+  resourceCounter     ResourceCounter?
+  limitEvents         LimitEvent[]
+  auditLogs           AuditLog[]
 
   @@index([status, deletedAt])
 }
@@ -426,54 +430,113 @@ model StorageFile {
 }
 
 model Plan {
-  id              String         @id @default(uuid()) @db.Char(36)
-  name            String         @db.VarChar(100)
-  slug            String         @unique @db.VarChar(64)
-  priceCents      Int?
-  currency        String         @default("BRL") @db.Char(3)
-  billingInterval PlanInterval   @default(MONTHLY)
-  maxCameras      Int
-  maxStorageBytes BigInt
-  retentionDays   Int
-  maxUsers        Int
-  enabledFeatures Json
-  status          PlanStatus     @default(ACTIVE)
-  createdAt       DateTime       @default(now()) @db.DateTime(3)
-  updatedAt       DateTime       @updatedAt @db.DateTime(3)
-  subscriptions   Subscription[]
+  id                  String                @id @default(uuid()) @db.Char(36)
+  name                String                @db.VarChar(100)
+  slug                String                @unique @db.VarChar(64)
+  code                String                @db.VarChar(32)
+  version             Int                   @default(1)
+  priceCents          Int?
+  currency            String                @default("BRL") @db.Char(3)
+  billingInterval     PlanInterval          @default(MONTHLY)
+  maxCameras          Int
+  maxStorageBytes     BigInt
+  retentionDays       Int
+  maxUsers            Int
+  trialDays           Int                   @default(0)
+  isPublic            Boolean               @default(true)
+  enabledFeatures     Json
+  status              PlanStatus            @default(ACTIVE)
+  createdAt           DateTime              @default(now()) @db.DateTime(3)
+  updatedAt           DateTime              @updatedAt @db.DateTime(3)
+  subscriptions       Subscription[]
+  subscriptionHistory SubscriptionHistory[]
 
+  @@unique([code, version])
   @@index([status])
+  @@index([code, status, isPublic])
 }
 
 model Subscription {
-  id                 String             @id @default(uuid()) @db.Char(36)
-  organizationId     String             @db.Char(36)
-  planId             String             @db.Char(36)
-  status             SubscriptionStatus @default(TRIAL)
-  startedAt          DateTime           @default(now()) @db.DateTime(3)
-  currentPeriodStart DateTime           @db.DateTime(3)
-  currentPeriodEnd   DateTime           @db.DateTime(3)
-  canceledAt         DateTime?          @db.DateTime(3)
-  trialEndsAt        DateTime?          @db.DateTime(3)
-  createdAt          DateTime           @default(now()) @db.DateTime(3)
-  updatedAt          DateTime           @updatedAt @db.DateTime(3)
-  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  plan               Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  id                 String                @id @default(uuid()) @db.Char(36)
+  organizationId     String                @db.Char(36)
+  planId             String                @db.Char(36)
+  status             SubscriptionStatus    @default(TRIALING)
+  startedAt          DateTime              @default(now()) @db.DateTime(3)
+  currentPeriodStart DateTime              @db.DateTime(3)
+  currentPeriodEnd   DateTime              @db.DateTime(3)
+  canceledAt         DateTime?             @db.DateTime(3)
+  cancelAtPeriodEnd  Boolean               @default(false)
+  trialEndsAt        DateTime?             @db.DateTime(3)
+  endedAt            DateTime?             @db.DateTime(3)
+  createdAt          DateTime              @default(now()) @db.DateTime(3)
+  updatedAt          DateTime              @updatedAt @db.DateTime(3)
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan               Plan                  @relation(fields: [planId], references: [id], onDelete: Restrict)
+  history            SubscriptionHistory[]
 
   @@index([organizationId, status])
   @@index([organizationId, currentPeriodEnd])
   @@index([planId, status])
 }
 
+model SubscriptionHistory {
+  id               String             @id @default(uuid()) @db.Char(36)
+  organizationId   String             @db.Char(36)
+  subscriptionId   String             @db.Char(36)
+  planId           String             @db.Char(36)
+  planCode         String             @db.VarChar(32)
+  planVersion      Int
+  status           SubscriptionStatus
+  reason           String             @db.VarChar(100)
+  limitsSnapshot   Json
+  featuresSnapshot Json
+  periodStart      DateTime           @db.DateTime(3)
+  periodEnd        DateTime           @db.DateTime(3)
+  createdAt        DateTime           @default(now()) @db.DateTime(3)
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription     Subscription       @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  plan             Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([subscriptionId, createdAt])
+}
+
 model StorageUsage {
   id             String       @id @default(uuid()) @db.Char(36)
   organizationId String       @unique @db.Char(36)
   usedBytes      BigInt       @default(0)
+  reservedBytes  BigInt       @default(0)
   fileCount      BigInt       @default(0)
   version        Int          @default(0)
   calculatedAt   DateTime     @default(now()) @db.DateTime(3)
   updatedAt      DateTime     @updatedAt @db.DateTime(3)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model ResourceCounter {
+  id             String       @id @default(uuid()) @db.Char(36)
+  organizationId String       @unique @db.Char(36)
+  cameraCount    Int          @default(0)
+  memberCount    Int          @default(0)
+  version        Int          @default(0)
+  updatedAt      DateTime     @updatedAt @db.DateTime(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model LimitEvent {
+  id             String       @id @default(uuid()) @db.Char(36)
+  organizationId String       @db.Char(36)
+  type           String       @db.VarChar(64)
+  resource       String       @db.VarChar(32)
+  threshold      Int?
+  currentValue   BigInt
+  limitValue     BigInt
+  metadata       Json?
+  createdAt      DateTime     @default(now()) @db.DateTime(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, resource, createdAt])
+  @@index([type, createdAt])
 }
 
 model AuditLog {

@@ -1,6 +1,7 @@
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { AuthScreen } from './auth/AuthScreen';
 import { OrganizationPanel } from './organizations/OrganizationPanel';
+import { BillingPanel } from './billing/BillingPanel';
 
 function ProtectedArea() {
   const { user, organization, loading, logout } = useAuth();
@@ -37,6 +38,7 @@ function ProtectedArea() {
           </p>
         </section>
         <OrganizationPanel />
+        <BillingPanel />
       </div>
     </main>
   );

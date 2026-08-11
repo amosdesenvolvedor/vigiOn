@@ -3,16 +3,21 @@ import { AuthError } from '../auth/auth.errors';
 import { createOpaqueToken, hashOpaqueToken } from '../auth/tokens';
 import type { RequestMetadata, TokenDelivery } from '../auth/auth.types';
 import type { TenantContext } from '../tenancy/tenant-context';
+import { EntitlementService } from '../billing/entitlement.service';
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 const notFound = () => new AuthError(404, 'NOT_FOUND', 'Resource not found');
 const forbidden = () => new AuthError(403, 'FORBIDDEN', 'Insufficient permission');
 
 export class OrganizationService {
+  private readonly entitlements: EntitlementService;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly delivery: TokenDelivery,
-  ) {}
+  ) {
+    this.entitlements = new EntitlementService(prisma);
+  }
 
   listOrganizations(userId: string) {
     return this.prisma.organizationMembership.findMany({
@@ -134,6 +139,17 @@ export class OrganizationService {
   async invite(context: TenantContext, email: string, role: UserRole, metadata: RequestMetadata) {
     this.assertCanAssign(context, role);
     const normalizedEmail = normalizeEmail(email);
+    const expired = await this.prisma.organizationInvitation.updateMany({
+      where: {
+        organizationId: context.organizationId,
+        normalizedEmail,
+        status: 'PENDING',
+        expiresAt: { lte: new Date() },
+      },
+      data: { status: 'EXPIRED' },
+    });
+    for (let index = 0; index < expired.count; index += 1)
+      await this.entitlements.releaseMember(context.organizationId);
     const duplicate = await this.prisma.organizationInvitation.findFirst({
       where: {
         organizationId: context.organizationId,
@@ -161,19 +177,26 @@ export class OrganizationService {
       if (membership && membership.status !== 'REMOVED')
         throw new AuthError(409, 'MEMBER_EXISTS', 'User is already a member');
     }
+    await this.entitlements.reserveMember(context.organizationId);
     const token = createOpaqueToken();
-    const invitation = await this.prisma.organizationInvitation.create({
-      data: {
-        organizationId: context.organizationId,
-        email: email.trim(),
-        normalizedEmail,
-        role,
-        status: 'PENDING',
-        tokenHash: hashOpaqueToken(token),
-        expiresAt: new Date(Date.now() + 72 * 3_600_000),
-        invitedById: context.userId,
-      },
-    });
+    let invitation;
+    try {
+      invitation = await this.prisma.organizationInvitation.create({
+        data: {
+          organizationId: context.organizationId,
+          email: email.trim(),
+          normalizedEmail,
+          role,
+          status: 'PENDING',
+          tokenHash: hashOpaqueToken(token),
+          expiresAt: new Date(Date.now() + 72 * 3_600_000),
+          invitedById: context.userId,
+        },
+      });
+    } catch (error) {
+      await this.entitlements.releaseMember(context.organizationId);
+      throw error;
+    }
     await this.prisma.auditLog.create({
       data: {
         organizationId: context.organizationId,
@@ -228,6 +251,7 @@ export class OrganizationService {
       data: { status: 'CANCELED', canceledAt: new Date() },
     });
     if (!result.count) throw notFound();
+    await this.entitlements.releaseMember(context.organizationId);
     await this.audit(
       this.prisma,
       context,
@@ -330,6 +354,7 @@ export class OrganizationService {
     this.assertCanManage(context, target.role, target.userId);
     if (target.role === 'OWNER') await this.assertAnotherOwner(context.organizationId, target.id);
     await this.prisma.organizationMembership.update({ where: { id }, data: { status: 'REMOVED' } });
+    await this.entitlements.releaseMember(context.organizationId);
     await this.prisma.session.updateMany({
       where: { userId: target.userId, organizationId: context.organizationId, revokedAt: null },
       data: { revokedAt: new Date() },

@@ -73,7 +73,7 @@ export class AuthService {
       throw new AuthError(503, 'PLAN_UNAVAILABLE', 'Registration is temporarily unavailable');
     const passwordHash = await hashPassword(input.password);
     const now = new Date();
-    const trialEndsAt = plusDays(14);
+    const periodEnd = plusDays(30);
 
     const user = await this.prisma.$transaction(async (tx) => {
       const organization = await tx.organization.create({
@@ -82,6 +82,7 @@ export class AuthService {
           slug: slugify(input.organizationName),
           timezone: input.timezone,
           storageUsage: { create: {} },
+          resourceCounter: { create: { memberCount: 1 } },
         },
       });
       const createdUser = await tx.user.create({
@@ -104,14 +105,33 @@ export class AuthService {
         },
       });
       await tx.organizationSettings.create({ data: { organizationId: organization.id } });
-      await tx.subscription.create({
+      const subscription = await tx.subscription.create({
         data: {
           organizationId: organization.id,
           planId: freePlan.id,
-          status: 'TRIAL',
+          status: 'ACTIVE',
           currentPeriodStart: now,
-          currentPeriodEnd: trialEndsAt,
-          trialEndsAt,
+          currentPeriodEnd: periodEnd,
+        },
+      });
+      await tx.subscriptionHistory.create({
+        data: {
+          organizationId: organization.id,
+          subscriptionId: subscription.id,
+          planId: freePlan.id,
+          planCode: freePlan.code,
+          planVersion: freePlan.version,
+          status: 'ACTIVE',
+          reason: 'REGISTRATION_FREE',
+          limitsSnapshot: {
+            maxCameras: freePlan.maxCameras,
+            maxStorageBytes: freePlan.maxStorageBytes.toString(),
+            retentionDays: freePlan.retentionDays,
+            maxUsers: freePlan.maxUsers,
+          },
+          featuresSnapshot: freePlan.enabledFeatures as never,
+          periodStart: now,
+          periodEnd,
         },
       });
       await tx.auditLog.create({
@@ -121,6 +141,17 @@ export class AuthService {
           action: 'ORGANIZATION_CREATED',
           entityType: 'Organization',
           entityId: organization.id,
+          ...metadata,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: organization.id,
+          actorUserId: createdUser.id,
+          action: 'SUBSCRIPTION_CREATED',
+          entityType: 'Subscription',
+          entityId: subscription.id,
+          metadata: { planCode: freePlan.code, planVersion: freePlan.version },
           ...metadata,
         },
       });

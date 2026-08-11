@@ -43,6 +43,7 @@ describe('data foundation and tenant isolation', () => {
       data: {
         name: 'Integration',
         slug: `integration-${suffix}`,
+        code: `INTEGRATION_${suffix.toUpperCase()}`,
         maxCameras: 2,
         maxStorageBytes: 1_000_000n,
         retentionDays: 7,

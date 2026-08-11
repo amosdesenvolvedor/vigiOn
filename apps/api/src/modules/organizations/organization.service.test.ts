@@ -18,10 +18,17 @@ const delivery: TokenDelivery = {
 const service = new OrganizationService(prisma, delivery);
 const metadata = { ipAddress: '127.0.0.1', userAgent: 'Vitest' };
 const passwordHash = 'test-only-not-a-real-password-hash';
+let planId = '';
 
 async function tenant(label: string) {
   const organization = await prisma.organization.create({
-    data: { name: `Tenant ${label}`, slug: `tenant-${label}-${suffix}`, settings: { create: {} } },
+    data: {
+      name: `Tenant ${label}`,
+      slug: `tenant-${label}-${suffix}`,
+      settings: { create: {} },
+      storageUsage: { create: {} },
+      resourceCounter: { create: { memberCount: 1 } },
+    },
   });
   organizationIds.push(organization.id);
   const user = await prisma.user.create({
@@ -38,6 +45,15 @@ async function tenant(label: string) {
   const membership = await prisma.organizationMembership.create({
     data: { organizationId: organization.id, userId: user.id, role: 'OWNER', status: 'ACTIVE' },
   });
+  await prisma.subscription.create({
+    data: {
+      organizationId: organization.id,
+      planId,
+      status: 'ACTIVE',
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 86_400_000),
+    },
+  });
   return {
     organization,
     user,
@@ -51,22 +67,45 @@ async function tenant(label: string) {
   };
 }
 
-beforeAll(() => prisma.$connect());
+beforeAll(async () => {
+  await prisma.$connect();
+  const plan = await prisma.plan.create({
+    data: {
+      name: 'Membership Test',
+      slug: `membership-${suffix}`,
+      code: `MEMBERSHIP_${suffix.toUpperCase()}`,
+      maxCameras: 10,
+      maxStorageBytes: 1_000_000n,
+      retentionDays: 7,
+      maxUsers: 100,
+      enabledFeatures: ['MULTI_USER'],
+    },
+  });
+  planId = plan.id;
+});
 
 afterAll(async () => {
   await prisma.session.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.organizationInvitation.deleteMany({
     where: { organizationId: { in: organizationIds } },
   });
+  await prisma.limitEvent.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.auditLog.deleteMany({ where: { organizationId: { in: organizationIds } } });
+  await prisma.subscriptionHistory.deleteMany({
+    where: { organizationId: { in: organizationIds } },
+  });
+  await prisma.subscription.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.organizationMembership.deleteMany({
     where: { organizationId: { in: organizationIds } },
   });
   await prisma.organizationSettings.deleteMany({
     where: { organizationId: { in: organizationIds } },
   });
+  await prisma.storageUsage.deleteMany({ where: { organizationId: { in: organizationIds } } });
+  await prisma.resourceCounter.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.user.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.organization.deleteMany({ where: { id: { in: organizationIds } } });
+  await prisma.plan.delete({ where: { id: planId } });
   await prisma.$disconnect();
 });
 

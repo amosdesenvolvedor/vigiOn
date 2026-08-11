@@ -102,6 +102,10 @@ Copie o resultado para `JWT_ACCESS_SECRET` no `.env`. Consulte [docs/authenticat
 
 Organizações, memberships, troca segura de tenant, gestão de membros, convites e configurações estão implementados com autorização revalidada no banco. Consulte [docs/multi-tenancy.md](docs/multi-tenancy.md) para as regras de isolamento e segurança.
 
+## Planos e assinaturas
+
+FREE, BASIC, PRO e BUSINESS são configuráveis no banco. Assinaturas, trials, histórico, features, limites concorrentes de câmeras/usuários e reserva atômica de storage são centralizados no backend. Consulte [docs/plans-and-subscriptions.md](docs/plans-and-subscriptions.md).
+
 Em homologação/produção, o Compose inclui Caddy como proxy reverso, encaminha `/api/*` para a API e entrega o frontend no domínio com HTTPS automático. As portas internas `3000`, `5173` e `3306` ficam vinculadas apenas ao loopback da VM.
 
 ## Roadmap (18 etapas)

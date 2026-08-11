@@ -40,10 +40,11 @@ beforeAll(async () => {
   await prisma.$connect();
   await prisma.plan.upsert({
     where: { slug: 'free' },
-    update: {},
+    update: { code: 'FREE', maxUsers: 1 },
     create: {
       name: 'Free',
       slug: 'free',
+      code: 'FREE',
       maxCameras: 1,
       maxStorageBytes: 1_000n,
       retentionDays: 1,
@@ -56,6 +57,9 @@ beforeAll(async () => {
 afterAll(async () => {
   if (organizationIds.length) {
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: organizationIds } } });
+    await prisma.subscriptionHistory.deleteMany({
+      where: { organizationId: { in: organizationIds } },
+    });
     await prisma.organizationInvitation.deleteMany({
       where: { organizationId: { in: organizationIds } },
     });
@@ -67,6 +71,9 @@ afterAll(async () => {
     });
     await prisma.subscription.deleteMany({ where: { organizationId: { in: organizationIds } } });
     await prisma.storageUsage.deleteMany({ where: { organizationId: { in: organizationIds } } });
+    await prisma.resourceCounter.deleteMany({
+      where: { organizationId: { in: organizationIds } },
+    });
     await prisma.user.deleteMany({ where: { organizationId: { in: organizationIds } } });
     await prisma.organization.deleteMany({ where: { id: { in: organizationIds } } });
   }
@@ -81,7 +88,7 @@ describe('authentication lifecycle', () => {
     await expect(register('register')).rejects.toMatchObject({ code: 'ACCOUNT_EXISTS' });
     await expect(
       prisma.subscription.findFirst({ where: { organizationId: result.user.organizationId } }),
-    ).resolves.toMatchObject({ status: 'TRIAL' });
+    ).resolves.toMatchObject({ status: 'ACTIVE' });
     await expect(
       prisma.auditLog.findFirst({
         where: { organizationId: result.user.organizationId, action: 'ORGANIZATION_CREATED' },
