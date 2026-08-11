@@ -40,6 +40,7 @@ const withoutUndefined = (value: object) =>
 const notFound = () => new AuthError(404, 'CAMERA_NOT_FOUND', 'Camera not found');
 const cameraSelect = {
   id: true,
+  gatewayId: true,
   name: true,
   description: true,
   location: true,

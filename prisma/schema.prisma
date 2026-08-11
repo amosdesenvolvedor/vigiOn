@@ -149,6 +149,34 @@ enum OneTimeTokenType {
   EMAIL_VERIFICATION
 }
 
+enum GatewayStatus {
+  ONLINE
+  OFFLINE
+  CONNECTING
+  DISABLED
+  UNKNOWN
+}
+
+enum GatewayPairingStatus {
+  PENDING
+  USED
+  REVOKED
+  EXPIRED
+}
+
+enum GatewayCommandType {
+  GET_CAMERA_STATUS
+  TEST_CAMERA
+}
+
+enum GatewayCommandStatus {
+  PENDING
+  DELIVERED
+  SUCCEEDED
+  FAILED
+  EXPIRED
+}
+
 model Organization {
   id                  String                   @id @default(uuid()) @db.Char(36)
   name                String                   @db.VarChar(160)
@@ -164,6 +192,10 @@ model Organization {
   invitations         OrganizationInvitation[]
   settings            OrganizationSettings?
   cameras             Camera[]
+  gateways            Gateway[]
+  gatewayPairingCodes GatewayPairingCode[]
+  gatewayCommands     GatewayCommand[]
+  gatewayMessages     GatewayMessage[]
   events              CameraEvent[]
   notifications       Notification[]
   storageFiles        StorageFile[]
@@ -321,6 +353,7 @@ model PlatformUser {
 model Camera {
   id                   String                     @id @default(uuid()) @db.Char(36)
   organizationId       String                     @db.Char(36)
+  gatewayId            String?                    @db.Char(36)
   name                 String                     @db.VarChar(160)
   description          String?                    @db.Text
   location             String?                    @db.VarChar(255)
@@ -336,6 +369,7 @@ model Camera {
   createdAt            DateTime                   @default(now()) @db.DateTime(3)
   updatedAt            DateTime                   @updatedAt @db.DateTime(3)
   organization         Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  gateway              Gateway?                   @relation(fields: [gatewayId], references: [id], onDelete: SetNull)
   credential           CameraCredential?
   events               CameraEvent[]
   storageFiles         StorageFile[]
@@ -345,6 +379,87 @@ model Camera {
   @@index([organizationId, administrativeStatus, deletedAt])
   @@index([organizationId, connectionStatus, deletedAt])
   @@index([organizationId, lastSeenAt])
+  @@index([organizationId, gatewayId, deletedAt])
+}
+
+model Gateway {
+  id              String               @id @default(uuid()) @db.Char(36)
+  organizationId  String               @db.Char(36)
+  name            String               @db.VarChar(160)
+  deviceId        String               @unique @db.Char(36)
+  secretHash      String               @db.VarChar(255)
+  status          GatewayStatus        @default(UNKNOWN)
+  version         String?              @db.VarChar(40)
+  protocolVersion String               @default("1") @db.VarChar(16)
+  lastSeenAt      DateTime?            @db.DateTime(3)
+  lastUptime      Int?
+  disabledAt      DateTime?            @db.DateTime(3)
+  deletedAt       DateTime?            @db.DateTime(3)
+  createdAt       DateTime             @default(now()) @db.DateTime(3)
+  updatedAt       DateTime             @updatedAt @db.DateTime(3)
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  cameras         Camera[]
+  commands        GatewayCommand[]
+  messages        GatewayMessage[]
+  pairingCodes    GatewayPairingCode[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status, deletedAt])
+  @@index([organizationId, lastSeenAt])
+}
+
+model GatewayPairingCode {
+  id             String               @id @default(uuid()) @db.Char(36)
+  organizationId String               @db.Char(36)
+  gatewayId      String?              @db.Char(36)
+  codeHash       String               @unique @db.Char(64)
+  status         GatewayPairingStatus @default(PENDING)
+  expiresAt      DateTime             @db.DateTime(3)
+  usedAt         DateTime?            @db.DateTime(3)
+  createdById    String               @db.Char(36)
+  createdAt      DateTime             @default(now()) @db.DateTime(3)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  gateway        Gateway?             @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, status, expiresAt])
+  @@index([createdById, createdAt])
+}
+
+model GatewayCommand {
+  id             String               @id @default(uuid()) @db.Char(36)
+  organizationId String               @db.Char(36)
+  gatewayId      String               @db.Char(36)
+  cameraId       String?              @db.Char(36)
+  commandId      String               @unique @db.Char(36)
+  type           GatewayCommandType
+  status         GatewayCommandStatus @default(PENDING)
+  payload        Json?
+  result         Json?
+  deliveredAt    DateTime?            @db.DateTime(3)
+  completedAt    DateTime?            @db.DateTime(3)
+  expiresAt      DateTime             @db.DateTime(3)
+  createdAt      DateTime             @default(now()) @db.DateTime(3)
+  updatedAt      DateTime             @updatedAt @db.DateTime(3)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  gateway        Gateway              @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, gatewayId, status, createdAt])
+  @@index([organizationId, cameraId, createdAt])
+  @@index([expiresAt, status])
+}
+
+model GatewayMessage {
+  id             String       @id @default(uuid()) @db.Char(36)
+  organizationId String       @db.Char(36)
+  gatewayId      String       @db.Char(36)
+  messageId      String       @db.Char(36)
+  type           String       @db.VarChar(80)
+  receivedAt     DateTime     @default(now()) @db.DateTime(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  gateway        Gateway      @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([gatewayId, messageId])
+  @@index([organizationId, receivedAt])
 }
 
 model CameraCredential {

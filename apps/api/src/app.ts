@@ -9,6 +9,7 @@ import { authRouter } from './modules/auth/auth.routes';
 import { organizationRouter } from './modules/organizations/organization.routes';
 import { plansRouter, subscriptionRouter } from './modules/billing/billing.routes';
 import { cameraRouter } from './modules/cameras/camera.routes';
+import { gatewayAgentRouter, gatewayRouter } from './modules/gateways/gateway.routes';
 
 export const createApp = () => {
   const app = express();
@@ -25,6 +26,8 @@ export const createApp = () => {
   app.use('/api/v1/plans', plansRouter);
   app.use('/api/v1/subscription', subscriptionRouter);
   app.use('/api/v1/cameras', cameraRouter);
+  app.use('/api/v1/gateways', gatewayRouter);
+  app.use('/api/v1/gateway-agent', gatewayAgentRouter);
   app.use(notFoundHandler);
   app.use(errorHandler);
 

@@ -45,6 +45,8 @@ export type Permission =
   | 'users:manage'
   | 'cameras:view'
   | 'cameras:manage'
+  | 'gateways:view'
+  | 'gateways:manage'
   | 'events:view'
   | 'events:manage'
   | 'notifications:view'
@@ -58,6 +60,8 @@ const permissions: Record<UserRole, ReadonlySet<Permission>> = {
     'users:manage',
     'cameras:view',
     'cameras:manage',
+    'gateways:view',
+    'gateways:manage',
     'events:view',
     'events:manage',
     'notifications:view',
@@ -70,6 +74,8 @@ const permissions: Record<UserRole, ReadonlySet<Permission>> = {
     'users:manage',
     'cameras:view',
     'cameras:manage',
+    'gateways:view',
+    'gateways:manage',
     'events:view',
     'events:manage',
     'notifications:view',
@@ -79,11 +85,12 @@ const permissions: Record<UserRole, ReadonlySet<Permission>> = {
   ]),
   OPERATOR: new Set<Permission>([
     'cameras:view',
+    'gateways:view',
     'events:view',
     'events:manage',
     'notifications:view',
   ]),
-  VIEWER: new Set<Permission>(['cameras:view', 'events:view']),
+  VIEWER: new Set<Permission>(['cameras:view', 'gateways:view', 'events:view']),
 };
 
 export const requirePermission =

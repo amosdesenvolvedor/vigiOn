@@ -62,6 +62,7 @@ O Compose inicia MariaDB, API e frontend. As credenciais presentes no exemplo s�
 ```text
 apps/api/          API Express
 apps/web/          aplicação React
+apps/gateway/      Edge Agent local
 packages/shared/   contratos TypeScript compartilhados
 prisma/            schema e futuras migrations
 docker/            Dockerfiles e configuração nginx
@@ -109,6 +110,10 @@ FREE, BASIC, PRO e BUSINESS são configuráveis no banco. Assinaturas, trials, h
 ## Câmeras
 
 O módulo de câmeras oferece CRUD tenant-scoped, paginação, busca, filtros, soft delete, estados administrativo/conectividade separados e credenciais AES-256-GCM. Não há streaming ou conexão real nesta etapa. Consulte [docs/cameras.md](docs/cameras.md).
+
+## Gateway / Edge Agent
+
+O gateway possui pairing temporário, identidade de máquina independente, heartbeat, offline por timeout, comandos idempotentes, reconexão com backoff, fila local limitada e associação segura de câmeras. A comunicação é HTTPS de saída e não expõe RTSP. Consulte [docs/gateway.md](docs/gateway.md) e [docs/camera-connectivity.md](docs/camera-connectivity.md).
 
 Em homologação/produção, o Compose inclui Caddy como proxy reverso, encaminha `/api/*` para a API e entrega o frontend no domínio com HTTPS automático. As portas internas `3000`, `5173` e `3306` ficam vinculadas apenas ao loopback da VM.
 

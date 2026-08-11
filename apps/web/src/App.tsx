@@ -3,6 +3,7 @@ import { AuthScreen } from './auth/AuthScreen';
 import { OrganizationPanel } from './organizations/OrganizationPanel';
 import { BillingPanel } from './billing/BillingPanel';
 import { CameraPanel } from './cameras/CameraPanel';
+import { GatewayPanel } from './gateways/GatewayPanel';
 
 function ProtectedArea() {
   const { user, organization, loading, logout } = useAuth();
@@ -40,6 +41,7 @@ function ProtectedArea() {
         </section>
         <OrganizationPanel />
         <CameraPanel />
+        <GatewayPanel />
         <BillingPanel />
       </div>
     </main>

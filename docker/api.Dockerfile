@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
+COPY apps/gateway/package.json apps/gateway/package.json
 COPY packages/shared/package.json packages/shared/package.json
 RUN npm ci
 
@@ -22,6 +23,7 @@ WORKDIR /app
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/web/package.json apps/web/package.json
+COPY --from=build /app/apps/gateway/package.json apps/gateway/package.json
 COPY --from=build /app/packages/shared/package.json packages/shared/package.json
 COPY --from=build /app/apps/api/dist apps/api/dist
 COPY --from=build /app/packages/shared/dist packages/shared/dist
