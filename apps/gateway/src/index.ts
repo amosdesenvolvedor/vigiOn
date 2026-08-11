@@ -10,6 +10,7 @@ import {
 import { LocalQueue } from './local-queue';
 import { decryptStreamSource, type EncryptedStreamSource } from './stream-envelope';
 import { StreamManager } from './stream-manager';
+import { CaptureManager } from './capture-manager';
 
 const cloudUrl = process.env.VIGION_CLOUD_URL ?? 'https://vigion.cloud';
 if (process.env.NODE_ENV === 'production' && !cloudUrl.startsWith('https://'))
@@ -104,12 +105,42 @@ const uploadMedia = async (config: Config, sessionId: string, name: string, data
   );
   if (!response.ok) throw new Error(`Media upload failed (${response.status})`);
 };
-const processCommands = async (config: Config, streams: StreamManager) => {
+const uploadAsset = async (
+  config: Config,
+  assetId: string,
+  uploadPath: string,
+  data: Buffer,
+  checksum: string,
+) => {
+  const response = await fetch(`${cloudUrl}/api/v1/gateway-agent${uploadPath}`, {
+    method: 'PUT',
+    headers: {
+      authorization: `Gateway ${config.gatewayId}.${config.secret}`,
+      'content-type': 'application/octet-stream',
+      'x-content-sha256': checksum,
+    },
+    body: data,
+  });
+  if (!response.ok) throw new Error(`Asset upload failed (${response.status})`);
+};
+const reportAssetFailure = async (config: Config, assetId: string, errorCode: string) => {
+  await request(
+    `/media-assets/${assetId}/failure`,
+    { method: 'POST', body: JSON.stringify({ errorCode }) },
+    config,
+  );
+};
+const processCommands = async (
+  config: Config,
+  streams: StreamManager,
+  captures: CaptureManager,
+) => {
   const { commands } = await request<{
     commands: Array<{ commandId: string; type: string; payload: unknown }>;
   }>('/commands', { method: 'GET' }, config);
   for (const command of commands) {
-    let status: ConnectionTestResult | 'UNSUPPORTED_CODEC' = 'FAILED';
+    let status: ConnectionTestResult | 'UNSUPPORTED_CODEC' | 'LOCAL_STORAGE_LIMIT_REACHED' =
+      'FAILED';
     if (command.type === 'TEST_CAMERA') {
       const payload = command.payload as { protocol?: string };
       status = await connectors.get(payload.protocol ?? 'UNKNOWN').testConnection();
@@ -133,6 +164,41 @@ const processCommands = async (config: Config, streams: StreamManager) => {
       const payload = command.payload as { streamSessionId: string };
       await streams.stop(payload.streamSessionId);
       status = 'SUCCESS';
+    } else if (command.type === 'CAPTURE_SNAPSHOT' || command.type === 'START_RECORDING') {
+      const payload = command.payload as {
+        assetId: string;
+        cameraId: string;
+        encryptedSource: EncryptedStreamSource;
+        uploadPath: string;
+        maxBytes: string;
+        maxDurationSeconds?: number;
+      };
+      const source = decryptStreamSource(config.encryptionPrivateKey, payload.encryptedSource);
+      try {
+        status =
+          command.type === 'CAPTURE_SNAPSHOT'
+            ? await captures.snapshot(
+                payload.assetId,
+                source,
+                payload.uploadPath,
+                Number(payload.maxBytes),
+              )
+            : await captures.startRecording(
+                payload.assetId,
+                source,
+                payload.uploadPath,
+                Number(payload.maxBytes),
+                payload.maxDurationSeconds ?? 60,
+              );
+      } catch (error) {
+        status =
+          error instanceof Error && error.message === 'LOCAL_STORAGE_LIMIT_REACHED'
+            ? 'LOCAL_STORAGE_LIMIT_REACHED'
+            : 'FAILED';
+      }
+    } else if (command.type === 'STOP_RECORDING') {
+      const payload = command.payload as { assetId: string };
+      status = await captures.stopRecording(payload.assetId);
     }
     await queue.enqueue({ messageId: randomUUID(), commandId: command.commandId, status });
   }
@@ -142,8 +208,19 @@ const run = async () => {
   const streams = new StreamManager((sessionId, name, data) =>
     uploadMedia(config, sessionId, name, data),
   );
+  const captures = new CaptureManager(
+    (assetId, uploadPath, data, checksum) =>
+      uploadAsset(config, assetId, uploadPath, data, checksum),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    (assetId, errorCode) => reportAssetFailure(config, assetId, errorCode),
+  );
   const shutdown = () => {
-    void streams.cleanup().finally(() => process.exit(0));
+    void Promise.all([streams.cleanup(), captures.cleanup()]).finally(() => process.exit(0));
   };
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
@@ -167,7 +244,8 @@ const run = async () => {
         },
         config,
       );
-      await processCommands(config, streams);
+      await processCommands(config, streams, captures);
+      await captures.flush();
       await queue.flush((payload) =>
         request('/commands/ack', { method: 'POST', body: JSON.stringify(payload) }, config),
       );

@@ -123,6 +123,17 @@ enum StorageFileType {
   OTHER
 }
 
+enum StorageFileStatus {
+  PENDING
+  CAPTURING
+  UPLOADING
+  AVAILABLE
+  FAILED
+  DELETING
+  DELETED
+  EXPIRED
+}
+
 enum PlanInterval {
   MONTHLY
   YEARLY
@@ -170,6 +181,9 @@ enum GatewayCommandType {
   START_STREAM
   STOP_STREAM
   STREAM_STATUS
+  CAPTURE_SNAPSHOT
+  START_RECORDING
+  STOP_RECORDING
 }
 
 enum GatewayCommandStatus {
@@ -258,6 +272,7 @@ model User {
   oneTimeTokens   OneTimeToken[]
   memberships     OrganizationMembership[]
   streamSessions  StreamSession[]
+  storageFiles    StorageFile[]
   sentInvitations OrganizationInvitation[] @relation("InvitationSender")
 
   @@unique([organizationId, id])
@@ -420,6 +435,7 @@ model Gateway {
   messages            GatewayMessage[]
   pairingCodes        GatewayPairingCode[]
   streamSessions      StreamSession[]
+  storageFiles        StorageFile[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, deletedAt])
@@ -576,28 +592,42 @@ model Notification {
 }
 
 model StorageFile {
-  id              String          @id @default(uuid()) @db.Char(36)
-  organizationId  String          @db.Char(36)
-  cameraId        String?         @db.Char(36)
-  eventId         String?         @db.Char(36)
+  id              String            @id @default(uuid()) @db.Char(36)
+  organizationId  String            @db.Char(36)
+  cameraId        String?           @db.Char(36)
+  gatewayId       String?           @db.Char(36)
+  requestedById   String?           @db.Char(36)
+  idempotencyKey  String?           @db.Char(36)
+  eventId         String?           @db.Char(36)
   type            StorageFileType
-  storageProvider String          @db.VarChar(60)
-  storageKey      String          @db.VarChar(768)
-  fileName        String          @db.VarChar(255)
-  mimeType        String          @db.VarChar(127)
-  sizeBytes       BigInt
+  status          StorageFileStatus @default(PENDING)
+  storageProvider String            @db.VarChar(60)
+  storageKey      String            @db.VarChar(768)
+  fileName        String            @db.VarChar(255)
+  mimeType        String            @db.VarChar(127)
+  sizeBytes       BigInt            @default(0)
+  reservedBytes   BigInt            @default(0)
   durationSeconds Int?
-  checksum        String?         @db.VarChar(128)
-  createdAt       DateTime        @default(now()) @db.DateTime(3)
-  expiresAt       DateTime?       @db.DateTime(3)
-  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  camera          Camera?         @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Restrict)
-  event           CameraEvent?    @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Restrict)
+  checksum        String?           @db.VarChar(128)
+  capturedAt      DateTime?         @db.DateTime(3)
+  uploadedAt      DateTime?         @db.DateTime(3)
+  deletedAt       DateTime?         @db.DateTime(3)
+  errorCode       String?           @db.VarChar(64)
+  createdAt       DateTime          @default(now()) @db.DateTime(3)
+  expiresAt       DateTime?         @db.DateTime(3)
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  camera          Camera?           @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Restrict)
+  gateway         Gateway?          @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
+  requestedBy     User?             @relation(fields: [organizationId, requestedById], references: [organizationId, id], onDelete: Restrict)
+  event           CameraEvent?      @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Restrict)
 
   @@unique([storageProvider, storageKey])
+  @@unique([organizationId, requestedById, idempotencyKey])
   @@index([organizationId, createdAt])
   @@index([organizationId, type, createdAt])
   @@index([organizationId, cameraId, createdAt])
+  @@index([organizationId, gatewayId, status])
+  @@index([status, expiresAt])
   @@index([organizationId, eventId])
   @@index([expiresAt])
 }

@@ -11,6 +11,7 @@ import { plansRouter, subscriptionRouter } from './modules/billing/billing.route
 import { cameraRouter } from './modules/cameras/camera.routes';
 import { gatewayAgentRouter, gatewayRouter } from './modules/gateways/gateway.routes';
 import { streamMediaRouter, streamRouter } from './modules/streams/stream.routes';
+import { mediaRouter, mediaUploadRouter } from './modules/media/media.routes';
 
 export const createApp = () => {
   const app = express();
@@ -30,8 +31,10 @@ export const createApp = () => {
   app.use('/api/v1/cameras', cameraRouter);
   app.use('/api/v1/gateways', gatewayRouter);
   app.use('/api/v1/gateway-agent/stream-media', streamMediaRouter);
+  app.use('/api/v1/gateway-agent/media-assets', mediaUploadRouter);
   app.use('/api/v1/gateway-agent', gatewayAgentRouter);
   app.use('/api/v1', streamRouter);
+  app.use('/api/v1', mediaRouter);
   app.use(notFoundHandler);
   app.use(errorHandler);
 

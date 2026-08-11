@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { apiRequest } from '../auth/api';
 import { useAuth } from '../auth/AuthContext';
 import { StreamPlayer } from './StreamPlayer';
+import { MediaPanel } from './MediaPanel';
 
 type Camera = {
   id: string;
@@ -49,6 +50,7 @@ export function CameraPanel() {
   const [form, setForm] = useState(emptyForm);
   const [message, setMessage] = useState('');
   const [viewing, setViewing] = useState<Camera | null>(null);
+  const [mediaCamera, setMediaCamera] = useState<Camera | null>(null);
   const canManage = user?.role === 'OWNER' || user?.role === 'ADMIN';
 
   const load = useCallback(async () => {
@@ -171,7 +173,7 @@ export function CameraPanel() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">Câmeras</p>
           <h2 className="mt-1 text-2xl font-bold">Dispositivos cadastrados</h2>
-          <p className="text-sm text-slate-400">{total} câmera(s) · nenhum streaming nesta etapa</p>
+          <p className="text-sm text-slate-400">{total} câmera(s) · live view e mídia persistida</p>
         </div>
         {canManage && (
           <button
@@ -249,6 +251,9 @@ export function CameraPanel() {
                 className="text-cyan-300 disabled:text-slate-600"
               >
                 Visualizar
+              </button>
+              <button onClick={() => setMediaCamera(camera)} className="text-violet-300">
+                Arquivos
               </button>
               {canManage && (
                 <>
@@ -457,6 +462,25 @@ export function CameraPanel() {
           cameraName={viewing.name}
           onClose={() => setViewing(null)}
         />
+      )}
+      {mediaCamera && (
+        <div className="fixed inset-0 z-40 overflow-y-auto bg-slate-950/95 p-4">
+          <div className="mx-auto my-8 max-w-5xl rounded-2xl border border-slate-700 bg-slate-900 p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-violet-400">Mídia persistida</p>
+                <h2 className="text-xl font-bold">{mediaCamera.name}</h2>
+              </div>
+              <button
+                onClick={() => setMediaCamera(null)}
+                className="rounded border border-slate-700 px-4 py-2 text-sm"
+              >
+                Fechar
+              </button>
+            </div>
+            <MediaPanel cameraId={mediaCamera.id} canManage={canManage} />
+          </div>
+        </div>
       )}
     </section>
   );

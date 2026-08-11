@@ -486,6 +486,34 @@ export class GatewayService {
           },
           data: { status: 'ENDED', endedAt: new Date() },
         });
+      if (!success && (command.type === 'CAPTURE_SNAPSHOT' || command.type === 'START_RECORDING')) {
+        const assetId = (command.payload as { assetId?: string } | null)?.assetId;
+        if (assetId) {
+          const asset = await tx.storageFile.findFirst({
+            where: { id: assetId, organizationId: auth.organizationId, gatewayId: auth.gatewayId },
+          });
+          if (asset && asset.reservedBytes > 0n) {
+            await tx.storageUsage.update({
+              where: { organizationId: auth.organizationId },
+              data: {
+                reservedBytes: { decrement: asset.reservedBytes },
+                version: { increment: 1 },
+              },
+            });
+            await tx.storageFile.update({
+              where: { id: asset.id },
+              data: {
+                status: 'FAILED',
+                reservedBytes: 0,
+                errorCode:
+                  input.status === 'LOCAL_STORAGE_LIMIT_REACHED'
+                    ? 'LOCAL_STORAGE_LIMIT_REACHED'
+                    : 'CAPTURE_FAILED',
+              },
+            });
+          }
+        }
+      }
     });
     console.info(
       JSON.stringify({

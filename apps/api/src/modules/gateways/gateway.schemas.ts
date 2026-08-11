@@ -32,6 +32,7 @@ export const commandAckSchema = z
       'AUTHENTICATION_ERROR',
       'UNSUPPORTED_PROTOCOL',
       'UNSUPPORTED_CODEC',
+      'LOCAL_STORAGE_LIMIT_REACHED',
     ]),
     details: z.string().trim().max(500).optional(),
   })

@@ -119,6 +119,10 @@ O gateway possui pairing temporário, identidade de máquina independente, heart
 
 Sessões temporárias autorizadas usam o long polling existente como control plane e HLS efêmero sobre HTTPS como media plane. O gateway remuxa RTSP/H.264 com FFmpeg, compartilha a fonte por câmera e o player HLS.js usa token curto em header. Consulte [docs/streaming.md](docs/streaming.md).
 
+## Captura e storage
+
+Snapshots JPEG e gravações MP4 limitadas são capturados pelo gateway, enviados por fila persistente autenticada e mantidos em object storage privado compatível com S3. Quota, retenção, links temporários, isolamento multi-tenant e soft delete são tratados pelo backend. Consulte [docs/media-storage.md](docs/media-storage.md).
+
 Em homologação/produção, o Compose inclui Caddy como proxy reverso, encaminha `/api/*` para a API e entrega o frontend no domínio com HTTPS automático. As portas internas `3000`, `5173` e `3306` ficam vinculadas apenas ao loopback da VM.
 
 ## Roadmap (18 etapas)

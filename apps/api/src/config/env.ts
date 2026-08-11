@@ -27,6 +27,16 @@ const envSchema = z.object({
   STREAM_START_TIMEOUT_SECONDS: z.coerce.number().int().min(10).max(180).default(45),
   MAX_ACTIVE_STREAMS_PER_ORG: z.coerce.number().int().min(1).max(100).default(10),
   STREAM_MEDIA_ROOT: z.string().min(1).default('/tmp/vigion-streams'),
+  OBJECT_STORAGE_ENDPOINT: z.string().url().default('http://localhost:9000'),
+  OBJECT_STORAGE_REGION: z.string().min(1).default('us-east-1'),
+  OBJECT_STORAGE_BUCKET: z.string().min(3).default('vigion-media'),
+  OBJECT_STORAGE_ACCESS_KEY: optionalSecret(3),
+  OBJECT_STORAGE_SECRET_KEY: optionalSecret(8),
+  MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+  SNAPSHOT_MAX_BYTES: z.coerce.number().int().min(1024).default(5_242_880),
+  RECORDING_MAX_BYTES: z.coerce.number().int().min(1_048_576).default(67_108_864),
+  RECORDING_SEGMENT_SECONDS: z.coerce.number().int().min(10).max(600).default(60),
+  RETENTION_INTERVAL_SECONDS: z.coerce.number().int().min(30).max(86400).default(300),
 });
 
 const parsed = envSchema.safeParse(process.env);
