@@ -113,10 +113,11 @@ export class SubscriptionService {
     if (!free) throw new AuthError(503, 'FREE_PLAN_UNAVAILABLE', 'Trial transition unavailable');
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
-      await tx.subscription.update({
-        where: { id: subscription.id },
+      const claimed = await tx.subscription.updateMany({
+        where: { id: subscription.id, status: 'TRIALING' },
         data: { status: 'EXPIRED', endedAt: now },
       });
+      if (!claimed.count) return null;
       await this.snapshot(tx, { ...subscription, status: 'EXPIRED' }, 'TRIAL_EXPIRED');
       const next = await tx.subscription.create({
         data: {

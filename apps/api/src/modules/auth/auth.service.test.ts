@@ -81,7 +81,7 @@ afterAll(async () => {
 });
 
 describe('authentication lifecycle', () => {
-  it('registers an OWNER with FREE trial and rejects duplicate email', async () => {
+  it('registers an OWNER with a permanent FREE plan and rejects duplicate email', async () => {
     const result = await register('register');
     expect(result.membership.role).toBe('OWNER');
     expect(delivered.verification).toHaveLength(64);
