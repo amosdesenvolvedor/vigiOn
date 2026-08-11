@@ -19,7 +19,7 @@ Login inválido, conta inexistente e conta inativa usam a mesma resposta. Login 
 
 `OneTimeToken` guarda somente hash de tokens aleatórios, com tipo, expiração e `usedAt`. Solicitações de recuperação sempre respondem genericamente. Redefinir a senha revoga todas as sessões. Verificação de e-mail preenche `emailVerifiedAt`.
 
-`TokenDelivery` é a abstração para o futuro provedor de e-mail. A implementação atual não envia nem registra tokens; não há simulação de entrega. Testes usam um adaptador capturável separado.
+`TokenDelivery` mantém o serviço desacoplado do provedor. O adaptador atual envia recuperação e verificação pela API HTTPS do Resend usando `RESEND_API_KEY`; testes usam um adaptador capturável separado. O remetente vem de `EMAIL_FROM` e os links usam `APP_URL`.
 
 ## Contexto e multi-tenancy
 
@@ -69,4 +69,4 @@ São registrados REGISTER, LOGIN_SUCCESS, LOGIN_FAILED, LOGOUT, LOGOUT_ALL, PASS
 - Homologações temporárias sem TLS podem usar `NODE_ENV=development`; essa configuração nunca deve ser usada para produção.
 - `WEB_ORIGIN` deve apontar para a origem exata do frontend.
 - Um proxy distribuído exigirá storage compartilhado para rate limiting; o limitador em memória atende apenas uma instância.
-- O provedor de e-mail deve implementar `TokenDelivery` antes de liberar recuperação e verificação ao público.
+- O domínio do remetente deve permanecer verificado no Resend e a chave deve vir somente do ambiente.

@@ -114,7 +114,9 @@ export class AuthService {
     });
 
     const verificationToken = await this.createOneTimeToken(user, 'EMAIL_VERIFICATION');
-    await this.delivery.sendEmailVerification(user.email, verificationToken);
+    await this.deliverSafely(() =>
+      this.delivery.sendEmailVerification(user.email, verificationToken),
+    );
     return { user, tokens: await this.issueSession(user, metadata) };
   }
 
@@ -260,7 +262,7 @@ export class AuthService {
         ...metadata,
       },
     });
-    await this.delivery.sendPasswordReset(user.email, token);
+    await this.deliverSafely(() => this.delivery.sendPasswordReset(user.email, token));
   }
 
   async resetPassword(token: string, password: string, metadata: RequestMetadata) {
@@ -378,5 +380,13 @@ export class AuthService {
       }),
     ]);
     return token;
+  }
+
+  private async deliverSafely(deliver: () => Promise<void>) {
+    try {
+      await deliver();
+    } catch {
+      console.error('Authentication email delivery failed');
+    }
   }
 }

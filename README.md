@@ -43,16 +43,19 @@ O Compose inicia MariaDB, API e frontend. As credenciais presentes no exemplo s�
 
 ## Variáveis de ambiente
 
-| Variável                | Uso                                 |
-| ----------------------- | ----------------------------------- |
-| `NODE_ENV`              | Ambiente da API                     |
-| `API_HOST` / `API_PORT` | Bind da API                         |
-| `WEB_ORIGIN`            | Origem autorizada pelo CORS         |
-| `VITE_API_URL`          | URL pública consumida pelo frontend |
-| `DATABASE_URL`          | Conexão Prisma com MySQL/MariaDB    |
-| `MYSQL_*`               | Inicialização do container MariaDB  |
-| `JWT_ACCESS_SECRET`     | Assinatura dos access tokens        |
-| `*_TTL_*`               | Expiração de tokens e sessões       |
+| Variável                | Uso                                  |
+| ----------------------- | ------------------------------------ |
+| `NODE_ENV`              | Ambiente da API                      |
+| `API_HOST` / `API_PORT` | Bind da API                          |
+| `WEB_ORIGIN`            | Origem autorizada pelo CORS          |
+| `VITE_API_URL`          | URL pública consumida pelo frontend  |
+| `DATABASE_URL`          | Conexão Prisma com MySQL/MariaDB     |
+| `MYSQL_*`               | Inicialização do container MariaDB   |
+| `JWT_ACCESS_SECRET`     | Assinatura dos access tokens         |
+| `*_TTL_*`               | Expiração de tokens e sessões        |
+| `APP_URL`               | URL pública usada em links de e-mail |
+| `EMAIL_FROM`            | Remetente verificado                 |
+| `RESEND_API_KEY`        | Credencial do provedor de e-mail     |
 
 ## Estrutura
 
@@ -94,6 +97,8 @@ openssl rand -base64 48
 ```
 
 Copie o resultado para `JWT_ACCESS_SECRET` no `.env`. Consulte [docs/authentication.md](docs/authentication.md) para endpoints, cookies e decisões de segurança.
+
+Em homologação/produção, o Compose inclui Caddy como proxy reverso, encaminha `/api/*` para a API e entrega o frontend no domínio com HTTPS automático. As portas internas `3000`, `5173` e `3306` ficam vinculadas apenas ao loopback da VM.
 
 ## Roadmap (18 etapas)
 

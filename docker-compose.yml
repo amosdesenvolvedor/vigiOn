@@ -27,12 +27,15 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 3000
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      EMAIL_FROM: ${EMAIL_FROM:-VigiOn <no-reply@vigion.cloud>}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       DATABASE_URL: mysql://${MYSQL_USER:-vigioni}:${MYSQL_PASSWORD:-change-me-local}@db:3306/${MYSQL_DATABASE:-vigioni}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-30}
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     depends_on:
       db:
         condition: service_healthy
@@ -45,9 +48,26 @@ services:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api/v1}
     restart: unless-stopped
     ports:
-      - '5173:80'
+      - '127.0.0.1:5173:80'
     depends_on:
       - api
 
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+
 volumes:
   mariadb_data:
+  caddy_data:
+  caddy_config:

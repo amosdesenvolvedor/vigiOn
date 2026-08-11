@@ -12,6 +12,9 @@ const envSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(60).default(30),
   EMAIL_VERIFICATION_TTL_HOURS: z.coerce.number().int().min(1).max(72).default(24),
+  APP_URL: z.string().url().default('http://localhost:5173'),
+  EMAIL_FROM: z.string().min(3).default('VigiOn <no-reply@vigion.cloud>'),
+  RESEND_API_KEY: z.string().min(20).optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

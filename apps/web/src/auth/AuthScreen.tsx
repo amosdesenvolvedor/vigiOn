@@ -1,15 +1,29 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { apiRequest } from './api';
 import { useAuth } from './AuthContext';
 
 type View = 'login' | 'register' | 'forgot' | 'reset';
 
 export function AuthScreen() {
-  const [view, setView] = useState<View>('login');
+  const query = new URLSearchParams(window.location.search);
+  const resetToken = query.get('resetToken') ?? '';
+  const verificationToken = query.get('verifyEmail');
+  const [view, setView] = useState<View>(resetToken ? 'reset' : 'login');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const { login, register } = useAuth();
+
+  useEffect(() => {
+    if (!verificationToken) return;
+    apiRequest('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ token: verificationToken }),
+    })
+      .then(() => setMessage('E-mail verificado com sucesso.'))
+      .catch(() => setError('O link de verificação é inválido ou expirou.'))
+      .finally(() => window.history.replaceState({}, '', '/'));
+  }, [verificationToken]);
 
   const submit =
     (action: (data: FormData) => Promise<void>) => async (event: FormEvent<HTMLFormElement>) => {
@@ -49,7 +63,7 @@ export function AuthScreen() {
       <Field name="email" label="E-mail" type="email" autoComplete="email" />
     ) : (
       <>
-        <Field name="token" label="Token de recuperação" />
+        <Field name="token" label="Token de recuperação" defaultValue={resetToken} />
         <Field name="password" label="Nova senha" type="password" autoComplete="new-password" />
         <Field
           name="passwordConfirmation"
@@ -155,6 +169,7 @@ function Field({
   name: string;
   type?: string;
   autoComplete?: string;
+  defaultValue?: string;
 }) {
   return (
     <label className="block text-sm text-slate-300">
