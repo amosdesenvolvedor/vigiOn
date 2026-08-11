@@ -9,6 +9,18 @@ export const notFoundHandler: RequestHandler = (_request, response) => {
 };
 
 export const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
+  if (
+    error instanceof SyntaxError &&
+    'status' in error &&
+    error.status === 400 &&
+    'type' in error &&
+    error.type === 'entity.parse.failed'
+  ) {
+    response.status(400).json({
+      error: { code: 'MALFORMED_JSON', message: 'Request body must contain valid JSON' },
+    });
+    return;
+  }
   if (error instanceof PlanLimitError) {
     response.status(error.status).json({
       error: {

@@ -39,6 +39,16 @@ afterAll(async () => {
 });
 
 describe('authentication HTTP security', () => {
+  it('returns a safe client error for malformed JSON', async () => {
+    const response = await request(createApp())
+      .post('/api/v1/gateway-agent/claim')
+      .set('content-type', 'application/json')
+      .send('{not-json');
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: { code: 'MALFORMED_JSON', message: 'Request body must contain valid JSON' },
+    });
+  });
   it('rejects unauthenticated camera access', async () => {
     expect((await request(createApp()).get('/api/v1/cameras')).status).toBe(401);
     expect((await request(createApp()).post('/api/v1/cameras').send({})).status).toBe(401);
