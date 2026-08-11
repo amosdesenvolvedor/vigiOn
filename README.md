@@ -6,7 +6,7 @@ Fundação de uma plataforma SaaS multi-tenant para monitoramento de câmeras IP
 
 - Monorepo npm workspaces, TypeScript estrito e contratos compartilhados
 - React 18, Vite 5 e Tailwind CSS 3 no frontend
-- Node.js 18, Express 4, Zod e Prisma 5 na API
+- Node.js 18, Express 4, Zod e Prisma 6 na API
 - MariaDB 11.4, Docker Compose e imagens de produção multi-stage
 - API versionada em `/api/v1`; health check em `/api/v1/health`
 
@@ -51,6 +51,8 @@ O Compose inicia MariaDB, API e frontend. As credenciais presentes no exemplo s�
 | `VITE_API_URL`          | URL pública consumida pelo frontend |
 | `DATABASE_URL`          | Conexão Prisma com MySQL/MariaDB    |
 | `MYSQL_*`               | Inicialização do container MariaDB  |
+| `JWT_ACCESS_SECRET`     | Assinatura dos access tokens        |
+| `*_TTL_*`               | Expiração de tokens e sessões       |
 
 ## Estrutura
 
@@ -82,6 +84,16 @@ npm run prisma:seed
 ```
 
 As entidades e a estratégia de isolamento estão detalhadas em [docs/database.md](docs/database.md).
+
+## Autenticação
+
+O backend oferece cadastro, login, refresh rotativo, logout, sessões, recuperação de senha, verificação de e-mail e autorização por função. Gere um segredo local antes de iniciar:
+
+```bash
+openssl rand -base64 48
+```
+
+Copie o resultado para `JWT_ACCESS_SECRET` no `.env`. Consulte [docs/authentication.md](docs/authentication.md) para endpoints, cookies e decisões de segurança.
 
 ## Roadmap (18 etapas)
 

@@ -1,64 +1,49 @@
-import { useEffect, useState } from 'react';
-import type { HealthResponse } from '@vigioni/shared';
+import { AuthProvider, useAuth } from './auth/AuthContext';
+import { AuthScreen } from './auth/AuthScreen';
 
-const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1';
-
-export function App() {
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch(`${apiUrl}/health`, { signal: controller.signal })
-      .then(async (response) => {
-        const data = (await response.json()) as HealthResponse;
-        setHealth(data);
-      })
-      .catch(() => setHealth(null));
-    return () => controller.abort();
-  }, []);
-
+function ProtectedArea() {
+  const { user, organization, loading, logout } = useAuth();
+  if (loading)
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-950 text-slate-300">
+        Validando sessão…
+      </main>
+    );
+  if (!user || !organization) return <AuthScreen />;
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-6 py-8">
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-400 font-bold text-slate-950">
-              V
-            </span>
-            <span className="text-xl font-semibold tracking-tight">VigiOn</span>
+    <main className="min-h-screen bg-slate-950 p-6 text-slate-100">
+      <div className="mx-auto max-w-5xl">
+        <header className="flex items-center justify-between border-b border-slate-800 pb-6">
+          <div>
+            <strong className="text-xl">VigiOn</strong>
+            <p className="text-sm text-slate-400">{organization.name}</p>
           </div>
-          <span className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
-            Fundação 01/18
-          </span>
+          <button
+            onClick={() => void logout()}
+            className="rounded-lg border border-slate-700 px-4 py-2 text-sm"
+          >
+            Sair
+          </button>
         </header>
-
-        <section className="flex flex-1 items-center py-16">
-          <div className="max-w-3xl">
-            <p className="mb-4 text-sm font-semibold uppercase tracking-[0.22em] text-emerald-400">
-              Monitoramento em nuvem
-            </p>
-            <h1 className="text-5xl font-bold leading-tight tracking-tight sm:text-7xl">
-              Segurança conectada, preparada para crescer.
-            </h1>
-            <p className="mt-7 max-w-2xl text-lg leading-8 text-slate-400">
-              A base técnica do VigiOn está pronta. Câmeras, eventos e notificações serão
-              adicionados de forma incremental nas próximas etapas.
-            </p>
-            <div className="mt-10 inline-flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm">
-              <span
-                className={`h-2.5 w-2.5 rounded-full ${health?.database === 'connected' ? 'bg-emerald-400' : 'bg-amber-400'}`}
-              />
-              {health
-                ? `API disponível · banco ${health.database === 'connected' ? 'conectado' : 'indisponível'}`
-                : 'Aguardando API local'}
-            </div>
-          </div>
+        <section className="py-20">
+          <p className="text-sm font-semibold uppercase tracking-[.2em] text-emerald-400">
+            Sessão protegida
+          </p>
+          <h1 className="mt-4 text-4xl font-bold">Olá, {user.name}.</h1>
+          <p className="mt-4 text-slate-400">
+            Sua autenticação está ativa com a função {user.role}. O dashboard será construído em uma
+            etapa futura.
+          </p>
         </section>
-
-        <footer className="border-t border-slate-900 pt-6 text-sm text-slate-500">
-          VigiOn · Plataforma SaaS multi-tenant
-        </footer>
       </div>
     </main>
+  );
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <ProtectedArea />
+    </AuthProvider>
   );
 }

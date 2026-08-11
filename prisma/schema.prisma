@@ -124,6 +124,11 @@ enum SubscriptionStatus {
   EXPIRED
 }
 
+enum OneTimeTokenType {
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+}
+
 model Organization {
   id           String             @id @default(uuid()) @db.Char(36)
   name         String             @db.VarChar(160)
@@ -170,16 +175,54 @@ model User {
   status          UserStatus   @default(INVITED)
   timezone        String?      @db.VarChar(64)
   lastLoginAt     DateTime?    @db.DateTime(3)
+  emailVerifiedAt DateTime?    @db.DateTime(3)
   deletedAt       DateTime?    @db.DateTime(3)
   createdAt       DateTime     @default(now()) @db.DateTime(3)
   updatedAt       DateTime     @updatedAt @db.DateTime(3)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   notifications   Notification[]
   auditLogs        AuditLog[]
+  sessions         Session[]
+  oneTimeTokens    OneTimeToken[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, deletedAt])
   @@index([organizationId, role])
+}
+
+model Session {
+  id             String    @id @default(uuid()) @db.Char(36)
+  organizationId String    @db.Char(36)
+  userId         String    @db.Char(36)
+  familyId       String    @db.Char(36)
+  tokenHash      String    @unique @db.Char(64)
+  expiresAt      DateTime  @db.DateTime(3)
+  revokedAt      DateTime? @db.DateTime(3)
+  lastUsedAt     DateTime? @db.DateTime(3)
+  replacedById   String?   @db.Char(36)
+  ipAddress      String?   @db.VarChar(45)
+  userAgent      String?   @db.VarChar(512)
+  createdAt      DateTime  @default(now()) @db.DateTime(3)
+  user           User      @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, userId, revokedAt, expiresAt])
+  @@index([familyId])
+  @@index([expiresAt])
+}
+
+model OneTimeToken {
+  id             String           @id @default(uuid()) @db.Char(36)
+  organizationId String           @db.Char(36)
+  userId         String           @db.Char(36)
+  type           OneTimeTokenType
+  tokenHash      String           @unique @db.Char(64)
+  expiresAt      DateTime         @db.DateTime(3)
+  usedAt         DateTime?        @db.DateTime(3)
+  createdAt      DateTime         @default(now()) @db.DateTime(3)
+  user           User             @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, userId, type, usedAt])
+  @@index([expiresAt])
 }
 
 model PlatformUser {

@@ -8,7 +8,7 @@ services:
       MARIADB_PASSWORD: ${MYSQL_PASSWORD:-change-me-local}
       MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-root-local}
     ports:
-      - '3306:3306'
+      - '127.0.0.1:3306:3306'
     volumes:
       - mariadb_data:/var/lib/mysql
     healthcheck:
@@ -23,11 +23,14 @@ services:
       dockerfile: docker/api.Dockerfile
     restart: unless-stopped
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
       API_HOST: 0.0.0.0
       API_PORT: 3000
       WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
       DATABASE_URL: mysql://${MYSQL_USER:-vigioni}:${MYSQL_PASSWORD:-change-me-local}@db:3306/${MYSQL_DATABASE:-vigioni}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-30}
     ports:
       - '3000:3000'
     depends_on:

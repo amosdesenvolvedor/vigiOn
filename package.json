@@ -27,10 +27,10 @@
     "npm": ">=9"
   },
   "devDependencies": {
-    "@prisma/client": "5.22.0",
+    "@prisma/client": "6.19.3",
     "concurrently": "8.2.2",
     "prettier": "3.3.3",
-    "prisma": "5.22.0",
+    "prisma": "6.19.3",
     "tsx": "4.19.2"
   },
   "prisma": {

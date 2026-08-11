@@ -7,6 +7,11 @@ const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().max(65535).default(3000),
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
   DATABASE_URL: z.string().min(1),
+  JWT_ACCESS_SECRET: z.string().min(32),
+  ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).max(3600).default(900),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(60).default(30),
+  EMAIL_VERIFICATION_TTL_HOURS: z.coerce.number().int().min(1).max(72).default(24),
 });
 
 const parsed = envSchema.safeParse(process.env);
