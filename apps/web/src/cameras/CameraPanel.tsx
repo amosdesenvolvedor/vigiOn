@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { apiRequest } from '../auth/api';
 import { useAuth } from '../auth/AuthContext';
+import { StreamPlayer } from './StreamPlayer';
 
 type Camera = {
   id: string;
+  gatewayId: string | null;
   name: string;
   description: string | null;
   location: string | null;
@@ -28,6 +30,10 @@ const emptyForm = {
   protocol: 'RTSP' as Camera['protocol'],
   username: '',
   password: '',
+  streamHost: '',
+  streamPort: '554',
+  streamPath: '',
+  streamTransport: 'tcp' as 'tcp' | 'udp',
 };
 
 export function CameraPanel() {
@@ -42,6 +48,7 @@ export function CameraPanel() {
   const [editing, setEditing] = useState<Camera | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [message, setMessage] = useState('');
+  const [viewing, setViewing] = useState<Camera | null>(null);
   const canManage = user?.role === 'OWNER' || user?.role === 'ADMIN';
 
   const load = useCallback(async () => {
@@ -96,7 +103,20 @@ export function CameraPanel() {
         if (form.username && form.password)
           await apiRequest(`/cameras/${editing.id}/credentials`, {
             method: 'PATCH',
-            body: JSON.stringify({ username: form.username, password: form.password }),
+            body: JSON.stringify({
+              username: form.username,
+              password: form.password,
+              ...(form.streamHost && form.streamPath
+                ? {
+                    stream: {
+                      host: form.streamHost,
+                      port: Number(form.streamPort),
+                      path: form.streamPath,
+                      transport: form.streamTransport,
+                    },
+                  }
+                : {}),
+            }),
           });
       } else {
         await apiRequest('/cameras', {
@@ -104,7 +124,22 @@ export function CameraPanel() {
           body: JSON.stringify({
             ...base,
             ...(form.username && form.password
-              ? { credentials: { username: form.username, password: form.password } }
+              ? {
+                  credentials: {
+                    username: form.username,
+                    password: form.password,
+                    ...(form.streamHost && form.streamPath
+                      ? {
+                          stream: {
+                            host: form.streamHost,
+                            port: Number(form.streamPort),
+                            path: form.streamPath,
+                            transport: form.streamTransport,
+                          },
+                        }
+                      : {}),
+                  },
+                }
               : {}),
           }),
         });
@@ -207,19 +242,28 @@ export function CameraPanel() {
               {camera.protocol} · {camera.connectionType}
               {camera.manufacturer ? ` · ${camera.manufacturer} ${camera.model ?? ''}` : ''}
             </p>
-            {canManage && (
-              <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                <button onClick={() => openEdit(camera)} className="text-emerald-300">
-                  Configurar
-                </button>
-                <button onClick={() => void setStatus(camera)} className="text-amber-300">
-                  {camera.administrativeStatus === 'ACTIVE' ? 'Desativar' : 'Ativar'}
-                </button>
-                <button onClick={() => void remove(camera)} className="text-rose-300">
-                  Excluir
-                </button>
-              </div>
-            )}
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <button
+                disabled={!camera.gatewayId || camera.administrativeStatus !== 'ACTIVE'}
+                onClick={() => setViewing(camera)}
+                className="text-cyan-300 disabled:text-slate-600"
+              >
+                Visualizar
+              </button>
+              {canManage && (
+                <>
+                  <button onClick={() => openEdit(camera)} className="text-emerald-300">
+                    Configurar
+                  </button>
+                  <button onClick={() => void setStatus(camera)} className="text-amber-300">
+                    {camera.administrativeStatus === 'ACTIVE' ? 'Desativar' : 'Ativar'}
+                  </button>
+                  <button onClick={() => void remove(camera)} className="text-rose-300">
+                    Excluir
+                  </button>
+                </>
+              )}
+            </div>
           </article>
         ))}
       </div>
@@ -355,6 +399,48 @@ export function CameraPanel() {
                   </button>
                 </div>
               </label>
+              <label className="text-sm">
+                Host RTSP
+                <input
+                  value={form.streamHost}
+                  onChange={(event) => setForm({ ...form, streamHost: event.target.value })}
+                  placeholder="192.168.1.20"
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                />
+              </label>
+              <label className="text-sm">
+                Porta RTSP
+                <input
+                  type="number"
+                  min="1"
+                  max="65535"
+                  value={form.streamPort}
+                  onChange={(event) => setForm({ ...form, streamPort: event.target.value })}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                />
+              </label>
+              <label className="text-sm">
+                Caminho RTSP
+                <input
+                  value={form.streamPath}
+                  onChange={(event) => setForm({ ...form, streamPath: event.target.value })}
+                  placeholder="/Streaming/Channels/101"
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                />
+              </label>
+              <label className="text-sm">
+                Transporte
+                <select
+                  value={form.streamTransport}
+                  onChange={(event) =>
+                    setForm({ ...form, streamTransport: event.target.value as 'tcp' | 'udp' })
+                  }
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                >
+                  <option value="tcp">TCP</option>
+                  <option value="udp">UDP</option>
+                </select>
+              </label>
             </div>
             <p className="mt-4 text-xs text-slate-500">
               As credenciais são criptografadas. A senha armazenada nunca será exibida novamente.
@@ -364,6 +450,13 @@ export function CameraPanel() {
             </button>
           </form>
         </div>
+      )}
+      {viewing && (
+        <StreamPlayer
+          cameraId={viewing.id}
+          cameraName={viewing.name}
+          onClose={() => setViewing(null)}
+        />
       )}
     </section>
   );

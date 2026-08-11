@@ -1,11 +1,15 @@
 import { chmod, readFile, writeFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import {
   ConnectorRegistry,
   PreparedConnector,
+  RtspConnector,
+  type StreamSourceConnector,
   type ConnectionTestResult,
 } from './connectors/camera-connector';
 import { LocalQueue } from './local-queue';
+import { decryptStreamSource, type EncryptedStreamSource } from './stream-envelope';
+import { StreamManager } from './stream-manager';
 
 const cloudUrl = process.env.VIGION_CLOUD_URL ?? 'https://vigion.cloud';
 if (process.env.NODE_ENV === 'production' && !cloudUrl.startsWith('https://'))
@@ -13,13 +17,15 @@ if (process.env.NODE_ENV === 'production' && !cloudUrl.startsWith('https://'))
 const configFile = process.env.VIGION_GATEWAY_CONFIG ?? './gateway-config.json';
 const queue = new LocalQueue(process.env.VIGION_GATEWAY_QUEUE ?? './gateway-queue.json');
 const connectors = new ConnectorRegistry();
-connectors.register(new PreparedConnector('RTSP'));
+connectors.register(new RtspConnector());
 connectors.register(new PreparedConnector('ONVIF'));
 
 interface Config {
   gatewayId: string;
   secret: string;
   heartbeatIntervalSeconds: number;
+  encryptionPrivateKey: string;
+  encryptionPublicKey: string;
 }
 const request = async <T>(path: string, init: RequestInit, config?: Config): Promise<T> => {
   const response = await fetch(`${cloudUrl}/api/v1/gateway-agent${path}`, {
@@ -35,14 +41,34 @@ const request = async <T>(path: string, init: RequestInit, config?: Config): Pro
 };
 const loadConfig = async (): Promise<Config | null> => {
   try {
-    return JSON.parse(await readFile(configFile, 'utf8')) as Config;
+    const stored = JSON.parse(await readFile(configFile, 'utf8')) as Partial<Config>;
+    if (!stored.gatewayId || !stored.secret || !stored.heartbeatIntervalSeconds) return null;
+    if (!stored.encryptionPrivateKey || !stored.encryptionPublicKey) {
+      const keys = encryptionKeys();
+      const upgraded = { ...stored, ...keys } as Config;
+      await saveConfig(upgraded);
+      return upgraded;
+    }
+    return stored as Config;
   } catch {
     return null;
   }
 };
+const encryptionKeys = () => {
+  const pair = generateKeyPairSync('x25519');
+  return {
+    encryptionPrivateKey: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+    encryptionPublicKey: pair.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+  };
+};
+const saveConfig = async (config: Config) => {
+  await writeFile(configFile, JSON.stringify(config), { mode: 0o600 });
+  await chmod(configFile, 0o600);
+};
 const claim = async (): Promise<Config> => {
   const pairingCode = process.env.VIGION_PAIRING_CODE;
   if (!pairingCode) throw new Error('VIGION_PAIRING_CODE is required for first installation');
+  const keys = encryptionKeys();
   const result = await request<{
     credential: { gatewayId: string; secret: string };
     heartbeatIntervalSeconds: number;
@@ -53,31 +79,74 @@ const claim = async (): Promise<Config> => {
       name: process.env.VIGION_GATEWAY_NAME ?? 'Gateway principal',
       version: '0.1.0',
       protocolVersion: '1',
+      encryptionPublicKey: keys.encryptionPublicKey,
     }),
   });
   const config = {
     ...result.credential,
     heartbeatIntervalSeconds: result.heartbeatIntervalSeconds,
+    ...keys,
   };
-  await writeFile(configFile, JSON.stringify(config), { mode: 0o600 });
-  await chmod(configFile, 0o600);
+  await saveConfig(config);
   return config;
 };
-const processCommands = async (config: Config) => {
+const uploadMedia = async (config: Config, sessionId: string, name: string, data: Buffer) => {
+  const response = await fetch(
+    `${cloudUrl}/api/v1/gateway-agent/stream-media/${sessionId}/${name}`,
+    {
+      method: 'PUT',
+      headers: {
+        authorization: `Gateway ${config.gatewayId}.${config.secret}`,
+        'content-type': name.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/mp2t',
+      },
+      body: data,
+    },
+  );
+  if (!response.ok) throw new Error(`Media upload failed (${response.status})`);
+};
+const processCommands = async (config: Config, streams: StreamManager) => {
   const { commands } = await request<{
     commands: Array<{ commandId: string; type: string; payload: unknown }>;
   }>('/commands', { method: 'GET' }, config);
   for (const command of commands) {
-    let status: ConnectionTestResult = 'FAILED';
+    let status: ConnectionTestResult | 'UNSUPPORTED_CODEC' = 'FAILED';
     if (command.type === 'TEST_CAMERA') {
       const payload = command.payload as { protocol?: string };
       status = await connectors.get(payload.protocol ?? 'UNKNOWN').testConnection();
+    } else if (command.type === 'START_STREAM') {
+      const payload = command.payload as {
+        streamSessionId: string;
+        cameraId: string;
+        encryptedSource: EncryptedStreamSource;
+      };
+      const connector = connectors.get('RTSP');
+      if (!('createStreamSource' in connector)) status = 'UNSUPPORTED_PROTOCOL';
+      else
+        status = await streams.start(
+          payload.streamSessionId,
+          payload.cameraId,
+          (connector as StreamSourceConnector).createStreamSource(
+            decryptStreamSource(config.encryptionPrivateKey, payload.encryptedSource),
+          ),
+        );
+    } else if (command.type === 'STOP_STREAM') {
+      const payload = command.payload as { streamSessionId: string };
+      await streams.stop(payload.streamSessionId);
+      status = 'SUCCESS';
     }
     await queue.enqueue({ messageId: randomUUID(), commandId: command.commandId, status });
   }
 };
 const run = async () => {
   const config = (await loadConfig()) ?? (await claim());
+  const streams = new StreamManager((sessionId, name, data) =>
+    uploadMedia(config, sessionId, name, data),
+  );
+  const shutdown = () => {
+    void streams.cleanup().finally(() => process.exit(0));
+  };
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
   let failures = 0;
   const startedAt = Date.now();
   for (;;) {
@@ -93,11 +162,12 @@ const run = async () => {
             timestamp: new Date().toISOString(),
             uptime: Math.floor((Date.now() - startedAt) / 1000),
             status: failures ? 'CONNECTING' : 'ONLINE',
+            encryptionPublicKey: config.encryptionPublicKey,
           }),
         },
         config,
       );
-      await processCommands(config);
+      await processCommands(config, streams);
       await queue.flush((payload) =>
         request('/commands/ack', { method: 'POST', body: JSON.stringify(payload) }, config),
       );

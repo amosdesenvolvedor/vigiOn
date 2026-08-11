@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@vigioni/shared": "0.1.0",
+    "hls.js": "^1.6.17",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },

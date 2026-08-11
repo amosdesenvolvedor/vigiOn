@@ -13,6 +13,7 @@ RUN npm run build -w @vigioni/gateway
 FROM node:18-alpine
 ENV NODE_ENV=production
 WORKDIR /agent
+RUN apk add --no-cache ffmpeg
 COPY --from=build /app/apps/gateway/dist ./dist
 USER node
 CMD ["node", "dist/index.js"]

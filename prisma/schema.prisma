@@ -167,12 +167,25 @@ enum GatewayPairingStatus {
 enum GatewayCommandType {
   GET_CAMERA_STATUS
   TEST_CAMERA
+  START_STREAM
+  STOP_STREAM
+  STREAM_STATUS
 }
 
 enum GatewayCommandStatus {
   PENDING
   DELIVERED
   SUCCEEDED
+  FAILED
+  EXPIRED
+}
+
+enum StreamSessionStatus {
+  REQUESTED
+  STARTING
+  ACTIVE
+  STOPPING
+  ENDED
   FAILED
   EXPIRED
 }
@@ -196,6 +209,7 @@ model Organization {
   gatewayPairingCodes GatewayPairingCode[]
   gatewayCommands     GatewayCommand[]
   gatewayMessages     GatewayMessage[]
+  streamSessions      StreamSession[]
   events              CameraEvent[]
   notifications       Notification[]
   storageFiles        StorageFile[]
@@ -243,6 +257,7 @@ model User {
   sessions        Session[]
   oneTimeTokens   OneTimeToken[]
   memberships     OrganizationMembership[]
+  streamSessions  StreamSession[]
   sentInvitations OrganizationInvitation[] @relation("InvitationSender")
 
   @@unique([organizationId, id])
@@ -373,6 +388,7 @@ model Camera {
   credential           CameraCredential?
   events               CameraEvent[]
   storageFiles         StorageFile[]
+  streamSessions       StreamSession[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, identifier])
@@ -383,25 +399,27 @@ model Camera {
 }
 
 model Gateway {
-  id              String               @id @default(uuid()) @db.Char(36)
-  organizationId  String               @db.Char(36)
-  name            String               @db.VarChar(160)
-  deviceId        String               @unique @db.Char(36)
-  secretHash      String               @db.VarChar(255)
-  status          GatewayStatus        @default(UNKNOWN)
-  version         String?              @db.VarChar(40)
-  protocolVersion String               @default("1") @db.VarChar(16)
-  lastSeenAt      DateTime?            @db.DateTime(3)
-  lastUptime      Int?
-  disabledAt      DateTime?            @db.DateTime(3)
-  deletedAt       DateTime?            @db.DateTime(3)
-  createdAt       DateTime             @default(now()) @db.DateTime(3)
-  updatedAt       DateTime             @updatedAt @db.DateTime(3)
-  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  cameras         Camera[]
-  commands        GatewayCommand[]
-  messages        GatewayMessage[]
-  pairingCodes    GatewayPairingCode[]
+  id                  String               @id @default(uuid()) @db.Char(36)
+  organizationId      String               @db.Char(36)
+  name                String               @db.VarChar(160)
+  deviceId            String               @unique @db.Char(36)
+  secretHash          String               @db.VarChar(255)
+  encryptionPublicKey String?              @db.Text
+  status              GatewayStatus        @default(UNKNOWN)
+  version             String?              @db.VarChar(40)
+  protocolVersion     String               @default("1") @db.VarChar(16)
+  lastSeenAt          DateTime?            @db.DateTime(3)
+  lastUptime          Int?
+  disabledAt          DateTime?            @db.DateTime(3)
+  deletedAt           DateTime?            @db.DateTime(3)
+  createdAt           DateTime             @default(now()) @db.DateTime(3)
+  updatedAt           DateTime             @updatedAt @db.DateTime(3)
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  cameras             Camera[]
+  commands            GatewayCommand[]
+  messages            GatewayMessage[]
+  pairingCodes        GatewayPairingCode[]
+  streamSessions      StreamSession[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, deletedAt])
@@ -426,26 +444,59 @@ model GatewayPairingCode {
 }
 
 model GatewayCommand {
-  id             String               @id @default(uuid()) @db.Char(36)
-  organizationId String               @db.Char(36)
-  gatewayId      String               @db.Char(36)
-  cameraId       String?              @db.Char(36)
-  commandId      String               @unique @db.Char(36)
-  type           GatewayCommandType
-  status         GatewayCommandStatus @default(PENDING)
-  payload        Json?
-  result         Json?
-  deliveredAt    DateTime?            @db.DateTime(3)
-  completedAt    DateTime?            @db.DateTime(3)
-  expiresAt      DateTime             @db.DateTime(3)
-  createdAt      DateTime             @default(now()) @db.DateTime(3)
-  updatedAt      DateTime             @updatedAt @db.DateTime(3)
-  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  gateway        Gateway              @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
+  id              String               @id @default(uuid()) @db.Char(36)
+  organizationId  String               @db.Char(36)
+  gatewayId       String               @db.Char(36)
+  cameraId        String?              @db.Char(36)
+  streamSessionId String?              @db.Char(36)
+  commandId       String               @unique @db.Char(36)
+  type            GatewayCommandType
+  status          GatewayCommandStatus @default(PENDING)
+  payload         Json?
+  result          Json?
+  deliveredAt     DateTime?            @db.DateTime(3)
+  completedAt     DateTime?            @db.DateTime(3)
+  expiresAt       DateTime             @db.DateTime(3)
+  createdAt       DateTime             @default(now()) @db.DateTime(3)
+  updatedAt       DateTime             @updatedAt @db.DateTime(3)
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  gateway         Gateway              @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
+  streamSession   StreamSession?       @relation(fields: [organizationId, streamSessionId], references: [organizationId, id], onDelete: Restrict)
 
   @@index([organizationId, gatewayId, status, createdAt])
   @@index([organizationId, cameraId, createdAt])
+  @@index([organizationId, streamSessionId, createdAt])
   @@index([expiresAt, status])
+}
+
+model StreamSession {
+  id             String              @id @default(uuid()) @db.Char(36)
+  organizationId String              @db.Char(36)
+  cameraId       String              @db.Char(36)
+  gatewayId      String              @db.Char(36)
+  userId         String              @db.Char(36)
+  idempotencyKey String              @db.Char(36)
+  tokenHash      String              @db.Char(64)
+  status         StreamSessionStatus @default(REQUESTED)
+  startedAt      DateTime?           @db.DateTime(3)
+  lastActivityAt DateTime            @default(now()) @db.DateTime(3)
+  expiresAt      DateTime            @db.DateTime(3)
+  endedAt        DateTime?           @db.DateTime(3)
+  errorCode      String?             @db.VarChar(64)
+  createdAt      DateTime            @default(now()) @db.DateTime(3)
+  updatedAt      DateTime            @updatedAt @db.DateTime(3)
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  camera         Camera              @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Restrict)
+  gateway        Gateway             @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
+  user           User                @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Restrict)
+  commands       GatewayCommand[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, userId, idempotencyKey])
+  @@index([organizationId, cameraId, status])
+  @@index([organizationId, gatewayId, status])
+  @@index([userId, status, expiresAt])
+  @@index([status, expiresAt])
 }
 
 model GatewayMessage {

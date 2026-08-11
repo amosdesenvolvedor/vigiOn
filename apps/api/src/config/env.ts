@@ -22,6 +22,11 @@ const envSchema = z.object({
   GATEWAY_PAIRING_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
   GATEWAY_OFFLINE_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(3600).default(120),
   GATEWAY_COMMAND_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+  STREAM_SESSION_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(600),
+  STREAM_IDLE_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(600).default(90),
+  STREAM_START_TIMEOUT_SECONDS: z.coerce.number().int().min(10).max(180).default(45),
+  MAX_ACTIVE_STREAMS_PER_ORG: z.coerce.number().int().min(1).max(100).default(10),
+  STREAM_MEDIA_ROOT: z.string().min(1).default('/tmp/vigion-streams'),
 });
 
 const parsed = envSchema.safeParse(process.env);

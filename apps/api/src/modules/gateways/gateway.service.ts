@@ -53,7 +53,13 @@ export class GatewayService {
   }
 
   async claim(
-    input: { pairingCode: string; name: string; version: string; protocolVersion: '1' },
+    input: {
+      pairingCode: string;
+      name: string;
+      version: string;
+      protocolVersion: '1';
+      encryptionPublicKey?: string | undefined;
+    },
     metadata: RequestMetadata,
   ) {
     const pairing = await this.prisma.gatewayPairingCode.findUnique({
@@ -85,6 +91,7 @@ export class GatewayService {
           secretHash: hashGatewaySecret(secret),
           version: input.version,
           protocolVersion: input.protocolVersion,
+          ...(input.encryptionPublicKey ? { encryptionPublicKey: input.encryptionPublicKey } : {}),
         },
         select: gatewaySelect,
       });
@@ -317,6 +324,7 @@ export class GatewayService {
       timestamp: string;
       uptime?: number | undefined;
       status: 'ONLINE' | 'CONNECTING';
+      encryptionPublicKey?: string | undefined;
     },
   ) {
     if (!auth) throw fail(401, 'GATEWAY_UNAUTHORIZED', 'Gateway authentication required');
@@ -344,6 +352,9 @@ export class GatewayService {
           protocolVersion: input.protocolVersion,
           lastSeenAt: new Date(),
           ...(input.uptime !== undefined ? { lastUptime: input.uptime } : {}),
+          ...(input.encryptionPublicKey !== undefined
+            ? { encryptionPublicKey: input.encryptionPublicKey }
+            : {}),
         },
       });
     console.info(
@@ -371,7 +382,10 @@ export class GatewayService {
       where: {
         gatewayId: auth.gatewayId,
         organizationId: auth.organizationId,
-        status: 'PENDING',
+        OR: [
+          { status: 'PENDING' },
+          { status: 'DELIVERED', deliveredAt: { lt: new Date(Date.now() - 10_000) } },
+        ],
         expiresAt: { gt: now },
       },
       take: 20,
@@ -380,7 +394,10 @@ export class GatewayService {
     });
     if (commands.length)
       await this.prisma.gatewayCommand.updateMany({
-        where: { commandId: { in: commands.map((item) => item.commandId) }, status: 'PENDING' },
+        where: {
+          commandId: { in: commands.map((item) => item.commandId) },
+          status: { in: ['PENDING', 'DELIVERED'] },
+        },
         data: { status: 'DELIVERED', deliveredAt: now },
       });
     return commands;
@@ -426,7 +443,7 @@ export class GatewayService {
           completedAt: new Date(),
         },
       });
-      if (command.cameraId)
+      if (command.cameraId && command.type === 'TEST_CAMERA')
         await tx.camera.updateMany({
           where: {
             id: command.cameraId,
@@ -438,16 +455,55 @@ export class GatewayService {
             ...(success ? { lastSeenAt: new Date() } : {}),
           },
         });
+      if (command.streamSessionId && command.type === 'START_STREAM')
+        await tx.streamSession.updateMany({
+          where: {
+            id: command.streamSessionId,
+            organizationId: auth.organizationId,
+            gatewayId: auth.gatewayId,
+            status: { in: ['REQUESTED', 'STARTING'] },
+          },
+          data: success
+            ? { status: 'STARTING' }
+            : {
+                status: 'FAILED',
+                endedAt: new Date(),
+                errorCode:
+                  input.status === 'TIMEOUT'
+                    ? 'STREAM_TIMEOUT'
+                    : input.status === 'UNSUPPORTED_CODEC'
+                      ? 'UNSUPPORTED_CODEC'
+                      : 'STREAM_START_FAILED',
+              },
+        });
+      if (command.streamSessionId && command.type === 'STOP_STREAM')
+        await tx.streamSession.updateMany({
+          where: {
+            id: command.streamSessionId,
+            organizationId: auth.organizationId,
+            gatewayId: auth.gatewayId,
+            status: { notIn: ['ENDED', 'EXPIRED'] },
+          },
+          data: { status: 'ENDED', endedAt: new Date() },
+        });
     });
     console.info(
       JSON.stringify({
-        event: success
-          ? 'camera.connection_success'
-          : input.status === 'TIMEOUT'
-            ? 'camera.timeout'
-            : 'camera.connection_failed',
+        event:
+          command.type === 'START_STREAM'
+            ? success
+              ? 'stream.starting'
+              : 'stream.failed'
+            : command.type === 'STOP_STREAM'
+              ? 'stream.stopped'
+              : success
+                ? 'camera.connection_success'
+                : input.status === 'TIMEOUT'
+                  ? 'camera.timeout'
+                  : 'camera.connection_failed',
         gatewayId: auth.gatewayId,
         cameraId: command.cameraId,
+        streamSessionId: command.streamSessionId,
         result: input.status,
       }),
     );

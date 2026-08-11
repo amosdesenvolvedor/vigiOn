@@ -20,7 +20,7 @@
     "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
-    "test": "npm run test -w @vigioni/api"
+    "test": "npm run test -w @vigioni/api && npm run test -w @vigioni/gateway"
   },
   "engines": {
     "node": ">=18.18.0",
@@ -29,11 +29,11 @@
   "devDependencies": {
     "@prisma/client": "6.19.3",
     "concurrently": "8.2.2",
-    "prettier": "3.3.3"
+    "prettier": "3.3.3",
+    "tsx": "4.23.12"
   },
   "dependencies": {
-    "prisma": "6.19.3",
-    "tsx": "4.19.2"
+    "prisma": "6.19.3"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

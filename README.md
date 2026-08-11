@@ -115,6 +115,10 @@ O módulo de câmeras oferece CRUD tenant-scoped, paginação, busca, filtros, s
 
 O gateway possui pairing temporário, identidade de máquina independente, heartbeat, offline por timeout, comandos idempotentes, reconexão com backoff, fila local limitada e associação segura de câmeras. A comunicação é HTTPS de saída e não expõe RTSP. Consulte [docs/gateway.md](docs/gateway.md) e [docs/camera-connectivity.md](docs/camera-connectivity.md).
 
+## Streaming
+
+Sessões temporárias autorizadas usam o long polling existente como control plane e HLS efêmero sobre HTTPS como media plane. O gateway remuxa RTSP/H.264 com FFmpeg, compartilha a fonte por câmera e o player HLS.js usa token curto em header. Consulte [docs/streaming.md](docs/streaming.md).
+
 Em homologação/produção, o Compose inclui Caddy como proxy reverso, encaminha `/api/*` para a API e entrega o frontend no domínio com HTTPS automático. As portas internas `3000`, `5173` e `3306` ficam vinculadas apenas ao loopback da VM.
 
 ## Roadmap (18 etapas)

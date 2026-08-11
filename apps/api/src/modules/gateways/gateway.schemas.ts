@@ -7,6 +7,7 @@ export const claimGatewaySchema = z
     name: z.string().trim().min(2).max(160),
     version: z.string().trim().min(1).max(40),
     protocolVersion: z.literal('1'),
+    encryptionPublicKey: z.string().min(80).max(1000),
   })
   .strict();
 export const heartbeatSchema = z
@@ -17,6 +18,7 @@ export const heartbeatSchema = z
     timestamp: z.string().datetime(),
     uptime: z.number().int().nonnegative().max(2_147_483_647).optional(),
     status: z.enum(['ONLINE', 'CONNECTING']),
+    encryptionPublicKey: z.string().min(80).max(1000).optional(),
   })
   .strict();
 export const commandAckSchema = z
@@ -29,6 +31,7 @@ export const commandAckSchema = z
       'TIMEOUT',
       'AUTHENTICATION_ERROR',
       'UNSUPPORTED_PROTOCOL',
+      'UNSUPPORTED_CODEC',
     ]),
     details: z.string().trim().max(500).optional(),
   })

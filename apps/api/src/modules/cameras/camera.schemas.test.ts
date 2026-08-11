@@ -1,7 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { cameraListSchema, createCameraSchema, updateCameraSchema } from './camera.schemas';
+import {
+  cameraCredentialsSchema,
+  cameraListSchema,
+  createCameraSchema,
+  updateCameraSchema,
+} from './camera.schemas';
 
 describe('camera input validation', () => {
+  it('rejects URLs and unsafe RTSP endpoints in camera stream configuration', () => {
+    expect(() =>
+      cameraCredentialsSchema.parse({
+        username: 'camera',
+        password: 'secret',
+        stream: {
+          host: 'http://169.254.169.254',
+          port: 554,
+          path: '/live',
+          transport: 'tcp',
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      cameraCredentialsSchema.parse({
+        username: 'camera',
+        password: 'secret',
+        stream: { host: 'camera.local', port: 554, path: '//evil', transport: 'tcp' },
+      }),
+    ).toThrow();
+  });
   it('accepts valid camera data and rejects organizationId injection', () => {
     expect(
       createCameraSchema.parse({

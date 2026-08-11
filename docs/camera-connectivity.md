@@ -18,7 +18,7 @@ A camada ONVIF futura fará discovery somente na rede local administrada pelo cl
 
 ## RTSP e ONVIF
 
-RTSP permanecerá na LAN entre câmera e agente. A cloud não conecta diretamente ao RTSP e esta etapa não cria player nem stream permanente. ONVIF será usado futuramente para discovery, metadados, perfis e URLs locais. Nenhuma biblioteca ONVIF foi adicionada porque ainda não há operação real que justifique a dependência.
+RTSP permanece na LAN entre câmera e agente. O Prompt 08 adicionou remux HLS temporário e player, sem tornar RTSP público ou persistir gravações. ONVIF será usado futuramente para discovery, metadados, perfis e URLs locais. Nenhuma biblioteca ONVIF foi adicionada porque host/path RTSP podem ser configurados diretamente.
 
 ## Erros estáveis
 

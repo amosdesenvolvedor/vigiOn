@@ -20,8 +20,31 @@ const cameraFields = {
   protocol: z.enum(['RTSP', 'ONVIF', 'HTTP', 'HTTPS', 'OTHER']),
 };
 
+export const rtspSourceSchema = z
+  .object({
+    host: z
+      .string()
+      .trim()
+      .min(1)
+      .max(253)
+      .regex(/^(?!.*[/@?#\s])(?:\[[0-9a-fA-F:]+\]|[a-zA-Z0-9.-]+)$/, 'Invalid camera host'),
+    port: z.number().int().min(1).max(65535).default(554),
+    path: z
+      .string()
+      .trim()
+      .min(1)
+      .max(512)
+      .regex(/^\/(?!\/)[^\s?#]*$/, 'Invalid RTSP path'),
+    transport: z.enum(['tcp', 'udp']).default('tcp'),
+  })
+  .strict();
+
 export const cameraCredentialsSchema = z
-  .object({ username: z.string().trim().min(1).max(191), password: z.string().min(1).max(512) })
+  .object({
+    username: z.string().trim().min(1).max(191),
+    password: z.string().min(1).max(512),
+    stream: rtspSourceSchema.optional(),
+  })
   .strict();
 
 export const createCameraSchema = z

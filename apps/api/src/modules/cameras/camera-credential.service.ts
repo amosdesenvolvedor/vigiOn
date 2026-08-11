@@ -3,9 +3,17 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { env } from '../../config/env';
 import { AuthError } from '../auth/auth.errors';
 
-interface CameraCredentials {
+export interface CameraCredentials {
   username: string;
   password: string;
+  stream?:
+    | {
+        host: string;
+        port: number;
+        path: string;
+        transport: 'tcp' | 'udp';
+      }
+    | undefined;
 }
 
 type DatabaseClient = PrismaClient | Prisma.TransactionClient;

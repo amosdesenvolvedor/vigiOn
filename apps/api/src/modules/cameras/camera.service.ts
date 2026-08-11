@@ -21,7 +21,20 @@ type CameraInput = {
   identifier?: string | null | undefined;
   connectionType: CameraConnectionType;
   protocol: CameraProtocol;
-  credentials?: { username: string; password: string } | undefined;
+  credentials?:
+    | {
+        username: string;
+        password: string;
+        stream?:
+          | {
+              host: string;
+              port: number;
+              path: string;
+              transport: 'tcp' | 'udp';
+            }
+          | undefined;
+      }
+    | undefined;
 };
 type CameraUpdateInput = {
   name?: string | undefined;
@@ -227,7 +240,18 @@ export class CameraService {
   async updateCredentials(
     context: TenantContext,
     id: string,
-    input: { username: string; password: string },
+    input: {
+      username: string;
+      password: string;
+      stream?:
+        | {
+            host: string;
+            port: number;
+            path: string;
+            transport: 'tcp' | 'udp';
+          }
+        | undefined;
+    },
     metadata: RequestMetadata,
   ) {
     await this.get(context, id);
