@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+const optionalSecret = (minimum: number) =>
+  z.preprocess((value) => (value === '' ? undefined : value), z.string().min(minimum).optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_HOST: z.string().default('0.0.0.0'),
@@ -14,7 +17,8 @@ const envSchema = z.object({
   EMAIL_VERIFICATION_TTL_HOURS: z.coerce.number().int().min(1).max(72).default(24),
   APP_URL: z.string().url().default('http://localhost:5173'),
   EMAIL_FROM: z.string().min(3).default('VigiOn <no-reply@vigion.cloud>'),
-  RESEND_API_KEY: z.string().min(20).optional(),
+  RESEND_API_KEY: optionalSecret(20),
+  CAMERA_CREDENTIAL_KEY: optionalSecret(43),
 });
 
 const parsed = envSchema.safeParse(process.env);

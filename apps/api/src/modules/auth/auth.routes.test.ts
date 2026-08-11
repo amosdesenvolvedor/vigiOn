@@ -39,6 +39,11 @@ afterAll(async () => {
 });
 
 describe('authentication HTTP security', () => {
+  it('rejects unauthenticated camera access', async () => {
+    expect((await request(createApp()).get('/api/v1/cameras')).status).toBe(401);
+    expect((await request(createApp()).post('/api/v1/cameras').send({})).status).toBe(401);
+  });
+
   it('returns an access token but never password, refresh token, or token hashes', async () => {
     const response = await request(createApp())
       .post('/api/v1/auth/login')

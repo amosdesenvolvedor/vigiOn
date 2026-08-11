@@ -8,6 +8,7 @@ import { healthRouter } from './routes/health';
 import { authRouter } from './modules/auth/auth.routes';
 import { organizationRouter } from './modules/organizations/organization.routes';
 import { plansRouter, subscriptionRouter } from './modules/billing/billing.routes';
+import { cameraRouter } from './modules/cameras/camera.routes';
 
 export const createApp = () => {
   const app = express();
@@ -23,6 +24,7 @@ export const createApp = () => {
   app.use('/api/v1/organizations', organizationRouter);
   app.use('/api/v1/plans', plansRouter);
   app.use('/api/v1/subscription', subscriptionRouter);
+  app.use('/api/v1/cameras', cameraRouter);
   app.use(notFoundHandler);
   app.use(errorHandler);
 

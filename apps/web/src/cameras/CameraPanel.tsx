@@ -1,0 +1,370 @@
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { apiRequest } from '../auth/api';
+import { useAuth } from '../auth/AuthContext';
+
+type Camera = {
+  id: string;
+  name: string;
+  description: string | null;
+  location: string | null;
+  administrativeStatus: 'ACTIVE' | 'DISABLED';
+  connectionStatus: 'UNKNOWN' | 'CONNECTING' | 'ONLINE' | 'OFFLINE' | 'ERROR';
+  connectionType: 'WIFI' | 'ETHERNET' | 'OTHER';
+  protocol: 'RTSP' | 'ONVIF' | 'HTTP' | 'HTTPS' | 'OTHER';
+  manufacturer: string | null;
+  model: string | null;
+  identifier: string | null;
+  lastSeenAt: string | null;
+};
+
+const emptyForm = {
+  name: '',
+  location: '',
+  description: '',
+  manufacturer: '',
+  model: '',
+  identifier: '',
+  connectionType: 'OTHER' as Camera['connectionType'],
+  protocol: 'RTSP' as Camera['protocol'],
+  username: '',
+  password: '',
+};
+
+export function CameraPanel() {
+  const { user, organization } = useAuth();
+  const [items, setItems] = useState<Camera[]>([]);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState('');
+  const [protocol, setProtocol] = useState('');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [showForm, setShowForm] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [editing, setEditing] = useState<Camera | null>(null);
+  const [form, setForm] = useState(emptyForm);
+  const [message, setMessage] = useState('');
+  const canManage = user?.role === 'OWNER' || user?.role === 'ADMIN';
+
+  const load = useCallback(async () => {
+    const params = new URLSearchParams({ limit: '50', sortBy: 'name', sortOrder: 'asc' });
+    if (search) params.set('search', search);
+    if (protocol) params.set('protocol', protocol);
+    const data = await apiRequest<{ items: Camera[]; pagination: { total: number } }>(
+      `/cameras?${params}`,
+    );
+    setItems(data.items);
+    setTotal(data.pagination.total);
+  }, [search, protocol]);
+  useEffect(() => {
+    void load().catch((error: Error) => setMessage(error.message));
+  }, [organization?.id, load]);
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm(emptyForm);
+    setShowForm(true);
+  };
+  const openEdit = (camera: Camera) => {
+    setEditing(camera);
+    setForm({
+      ...emptyForm,
+      name: camera.name,
+      location: camera.location ?? '',
+      description: camera.description ?? '',
+      manufacturer: camera.manufacturer ?? '',
+      model: camera.model ?? '',
+      identifier: camera.identifier ?? '',
+      connectionType: camera.connectionType,
+      protocol: camera.protocol,
+    });
+    setShowForm(true);
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    const base = {
+      name: form.name,
+      location: form.location,
+      description: form.description,
+      manufacturer: form.manufacturer,
+      model: form.model,
+      identifier: form.identifier,
+      connectionType: form.connectionType,
+      protocol: form.protocol,
+    };
+    try {
+      if (editing) {
+        await apiRequest(`/cameras/${editing.id}`, { method: 'PATCH', body: JSON.stringify(base) });
+        if (form.username && form.password)
+          await apiRequest(`/cameras/${editing.id}/credentials`, {
+            method: 'PATCH',
+            body: JSON.stringify({ username: form.username, password: form.password }),
+          });
+      } else {
+        await apiRequest('/cameras', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...base,
+            ...(form.username && form.password
+              ? { credentials: { username: form.username, password: form.password } }
+              : {}),
+          }),
+        });
+      }
+      setShowForm(false);
+      setMessage(editing ? 'Câmera atualizada.' : 'Câmera cadastrada. Aguardando conexão real.');
+      await load();
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  };
+  const setStatus = async (camera: Camera) => {
+    const status = camera.administrativeStatus === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+    await apiRequest(`/cameras/${camera.id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    await load();
+  };
+  const remove = async (camera: Camera) => {
+    if (!window.confirm(`Excluir ${camera.name}? Os dados históricos serão preservados.`)) return;
+    await apiRequest(`/cameras/${camera.id}`, { method: 'DELETE' });
+    await load();
+  };
+
+  return (
+    <section className="mb-12 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">Câmeras</p>
+          <h2 className="mt-1 text-2xl font-bold">Dispositivos cadastrados</h2>
+          <p className="text-sm text-slate-400">{total} câmera(s) · nenhum streaming nesta etapa</p>
+        </div>
+        {canManage && (
+          <button
+            onClick={openCreate}
+            className="rounded-lg bg-emerald-500 px-4 py-2 font-semibold text-slate-950"
+          >
+            + Adicionar câmera
+          </button>
+        )}
+      </div>
+      <div className="mt-6 flex flex-wrap gap-2">
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Pesquisar nome, local ou fabricante"
+          className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm"
+        />
+        <select
+          value={protocol}
+          onChange={(event) => setProtocol(event.target.value)}
+          className="rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm"
+        >
+          <option value="">Todos protocolos</option>
+          {['RTSP', 'ONVIF', 'HTTP', 'HTTPS', 'OTHER'].map((item) => (
+            <option key={item}>{item}</option>
+          ))}
+        </select>
+        <button
+          onClick={() => setView(view === 'grid' ? 'list' : 'grid')}
+          className="rounded-lg border border-slate-700 px-3 text-sm"
+        >
+          {view === 'grid' ? 'Lista' : 'Grid'}
+        </button>
+      </div>
+      {message && <p className="mt-4 text-sm text-amber-300">{message}</p>}
+
+      <div
+        className={
+          view === 'grid' ? 'mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3' : 'mt-6 grid gap-3'
+        }
+      >
+        {items.map((camera) => (
+          <article key={camera.id} className="rounded-xl border border-slate-800 bg-slate-950 p-5">
+            <div className="flex justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">{camera.name}</h3>
+                <p className="text-sm text-slate-500">{camera.location || 'Local não informado'}</p>
+              </div>
+              <span
+                className={
+                  camera.administrativeStatus === 'ACTIVE'
+                    ? 'text-xs text-emerald-400'
+                    : 'text-xs text-slate-500'
+                }
+              >
+                {camera.administrativeStatus}
+              </span>
+            </div>
+            <div className="mt-5 rounded-lg bg-slate-900 p-4 text-center text-sm text-slate-400">
+              <p className="font-medium text-slate-300">Aguardando conexão</p>
+              <p className="mt-1">Conectividade: {camera.connectionStatus}</p>
+              <p>
+                Última comunicação:{' '}
+                {camera.lastSeenAt ? new Date(camera.lastSeenAt).toLocaleString('pt-BR') : 'nunca'}
+              </p>
+            </div>
+            <p className="mt-4 text-xs text-slate-500">
+              {camera.protocol} · {camera.connectionType}
+              {camera.manufacturer ? ` · ${camera.manufacturer} ${camera.model ?? ''}` : ''}
+            </p>
+            {canManage && (
+              <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                <button onClick={() => openEdit(camera)} className="text-emerald-300">
+                  Configurar
+                </button>
+                <button onClick={() => void setStatus(camera)} className="text-amber-300">
+                  {camera.administrativeStatus === 'ACTIVE' ? 'Desativar' : 'Ativar'}
+                </button>
+                <button onClick={() => void remove(camera)} className="text-rose-300">
+                  Excluir
+                </button>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+      {!items.length && (
+        <p className="py-12 text-center text-slate-500">Nenhuma câmera encontrada.</p>
+      )}
+
+      {showForm && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/90 p-4">
+          <form
+            onSubmit={submit}
+            className="mx-auto my-6 max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6"
+          >
+            <div className="flex justify-between">
+              <h2 className="text-xl font-bold">
+                {editing ? 'Configurar câmera' : 'Adicionar câmera'}
+              </h2>
+              <button type="button" onClick={() => setShowForm(false)}>
+                Fechar
+              </button>
+            </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <label className="sm:col-span-2 text-sm">
+                Nome *
+                <input
+                  required
+                  minLength={2}
+                  maxLength={160}
+                  value={form.name}
+                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                />
+              </label>
+              <label className="text-sm">
+                Localização
+                <input
+                  maxLength={255}
+                  value={form.location}
+                  onChange={(event) => setForm({ ...form, location: event.target.value })}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                />
+              </label>
+              <label className="text-sm">
+                Identificador
+                <input
+                  maxLength={191}
+                  value={form.identifier}
+                  onChange={(event) => setForm({ ...form, identifier: event.target.value })}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                />
+              </label>
+              <label className="sm:col-span-2 text-sm">
+                Descrição
+                <textarea
+                  maxLength={4000}
+                  value={form.description}
+                  onChange={(event) => setForm({ ...form, description: event.target.value })}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                />
+              </label>
+              <label className="text-sm">
+                Fabricante
+                <input
+                  value={form.manufacturer}
+                  onChange={(event) => setForm({ ...form, manufacturer: event.target.value })}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                />
+              </label>
+              <label className="text-sm">
+                Modelo
+                <input
+                  value={form.model}
+                  onChange={(event) => setForm({ ...form, model: event.target.value })}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                />
+              </label>
+              <label className="text-sm">
+                Conexão
+                <select
+                  value={form.connectionType}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      connectionType: event.target.value as Camera['connectionType'],
+                    })
+                  }
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                >
+                  {['WIFI', 'ETHERNET', 'OTHER'].map((item) => (
+                    <option key={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                Protocolo
+                <select
+                  value={form.protocol}
+                  onChange={(event) =>
+                    setForm({ ...form, protocol: event.target.value as Camera['protocol'] })
+                  }
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                >
+                  {['RTSP', 'ONVIF', 'HTTP', 'HTTPS', 'OTHER'].map((item) => (
+                    <option key={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                Usuário da câmera
+                <input
+                  autoComplete="off"
+                  value={form.username}
+                  onChange={(event) => setForm({ ...form, username: event.target.value })}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                />
+              </label>
+              <label className="text-sm">
+                Senha da câmera
+                <div className="mt-1 flex">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={form.password}
+                    onChange={(event) => setForm({ ...form, password: event.target.value })}
+                    className="min-w-0 flex-1 rounded-l border border-slate-700 bg-slate-950 p-3"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="rounded-r border border-l-0 border-slate-700 px-3"
+                  >
+                    {showPassword ? 'Ocultar' : 'Mostrar'}
+                  </button>
+                </div>
+              </label>
+            </div>
+            <p className="mt-4 text-xs text-slate-500">
+              As credenciais são criptografadas. A senha armazenada nunca será exibida novamente.
+            </p>
+            <button className="mt-6 w-full rounded-lg bg-emerald-500 p-3 font-semibold text-slate-950">
+              {editing ? 'Salvar alterações' : 'Cadastrar câmera'}
+            </button>
+          </form>
+        </div>
+      )}
+    </section>
+  );
+}

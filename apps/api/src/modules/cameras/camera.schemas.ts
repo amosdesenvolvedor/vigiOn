@@ -1,0 +1,59 @@
+import { z } from 'zod';
+
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((value) => value || null)
+    .nullable()
+    .optional();
+
+const cameraFields = {
+  name: z.string().trim().min(2).max(160),
+  description: optionalText(4000),
+  location: optionalText(255),
+  manufacturer: optionalText(100),
+  model: optionalText(100),
+  identifier: optionalText(191),
+  connectionType: z.enum(['WIFI', 'ETHERNET', 'OTHER']),
+  protocol: z.enum(['RTSP', 'ONVIF', 'HTTP', 'HTTPS', 'OTHER']),
+};
+
+export const cameraCredentialsSchema = z
+  .object({ username: z.string().trim().min(1).max(191), password: z.string().min(1).max(512) })
+  .strict();
+
+export const createCameraSchema = z
+  .object({ ...cameraFields, credentials: cameraCredentialsSchema.optional() })
+  .strict();
+
+export const updateCameraSchema = z
+  .object(cameraFields)
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'At least one field is required');
+
+export const cameraStatusSchema = z.object({ status: z.enum(['ACTIVE', 'DISABLED']) }).strict();
+
+export const cameraListSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  administrativeStatus: z.enum(['ACTIVE', 'DISABLED']).optional(),
+  connectionStatus: z.enum(['UNKNOWN', 'CONNECTING', 'ONLINE', 'OFFLINE', 'ERROR']).optional(),
+  connectionType: z.enum(['WIFI', 'ETHERNET', 'OTHER']).optional(),
+  protocol: z.enum(['RTSP', 'ONVIF', 'HTTP', 'HTTPS', 'OTHER']).optional(),
+  location: z.string().trim().min(1).max(255).optional(),
+  search: z.string().trim().min(1).max(100).optional(),
+  sortBy: z
+    .enum([
+      'name',
+      'createdAt',
+      'updatedAt',
+      'lastSeenAt',
+      'administrativeStatus',
+      'connectionStatus',
+    ])
+    .default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+});

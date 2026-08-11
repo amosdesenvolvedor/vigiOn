@@ -48,18 +48,23 @@ enum PlatformUserRole {
   AUDITOR
 }
 
-enum CameraStatus {
-  PENDING
+enum CameraAdministrativeStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum CameraConnectionStatus {
+  UNKNOWN
+  CONNECTING
   ONLINE
   OFFLINE
-  DISABLED
   ERROR
 }
 
 enum CameraConnectionType {
-  DIRECT
-  GATEWAY
-  CLOUD
+  WIFI
+  ETHERNET
+  OTHER
 }
 
 enum CameraProtocol {
@@ -314,29 +319,31 @@ model PlatformUser {
 }
 
 model Camera {
-  id             String               @id @default(uuid()) @db.Char(36)
-  organizationId String               @db.Char(36)
-  name           String               @db.VarChar(160)
-  description    String?              @db.Text
-  location       String?              @db.VarChar(255)
-  status         CameraStatus         @default(PENDING)
-  connectionType CameraConnectionType @default(DIRECT)
-  protocol       CameraProtocol
-  manufacturer   String?              @db.VarChar(100)
-  model          String?              @db.VarChar(100)
-  identifier     String               @db.VarChar(191)
-  lastSeenAt     DateTime?            @db.DateTime(3)
-  deletedAt      DateTime?            @db.DateTime(3)
-  createdAt      DateTime             @default(now()) @db.DateTime(3)
-  updatedAt      DateTime             @updatedAt @db.DateTime(3)
-  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  credential     CameraCredential?
-  events         CameraEvent[]
-  storageFiles   StorageFile[]
+  id                   String                     @id @default(uuid()) @db.Char(36)
+  organizationId       String                     @db.Char(36)
+  name                 String                     @db.VarChar(160)
+  description          String?                    @db.Text
+  location             String?                    @db.VarChar(255)
+  administrativeStatus CameraAdministrativeStatus @default(ACTIVE)
+  connectionStatus     CameraConnectionStatus     @default(UNKNOWN)
+  connectionType       CameraConnectionType       @default(OTHER)
+  protocol             CameraProtocol
+  manufacturer         String?                    @db.VarChar(100)
+  model                String?                    @db.VarChar(100)
+  identifier           String?                    @db.VarChar(191)
+  lastSeenAt           DateTime?                  @db.DateTime(3)
+  deletedAt            DateTime?                  @db.DateTime(3)
+  createdAt            DateTime                   @default(now()) @db.DateTime(3)
+  updatedAt            DateTime                   @updatedAt @db.DateTime(3)
+  organization         Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  credential           CameraCredential?
+  events               CameraEvent[]
+  storageFiles         StorageFile[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, identifier])
-  @@index([organizationId, status, deletedAt])
+  @@index([organizationId, administrativeStatus, deletedAt])
+  @@index([organizationId, connectionStatus, deletedAt])
   @@index([organizationId, lastSeenAt])
 }
 

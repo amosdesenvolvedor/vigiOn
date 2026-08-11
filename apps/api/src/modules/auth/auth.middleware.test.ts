@@ -4,11 +4,14 @@ import { describe, expect, it } from 'vitest';
 import type { UserRole } from '@prisma/client';
 import { requirePermission } from './auth.middleware';
 
-const statuses: Record<UserRole, { manageUsers: number; manageEvents: number }> = {
-  OWNER: { manageUsers: 204, manageEvents: 204 },
-  ADMIN: { manageUsers: 204, manageEvents: 204 },
-  OPERATOR: { manageUsers: 403, manageEvents: 204 },
-  VIEWER: { manageUsers: 403, manageEvents: 403 },
+const statuses: Record<
+  UserRole,
+  { manageUsers: number; manageEvents: number; manageCameras: number }
+> = {
+  OWNER: { manageUsers: 204, manageEvents: 204, manageCameras: 204 },
+  ADMIN: { manageUsers: 204, manageEvents: 204, manageCameras: 204 },
+  OPERATOR: { manageUsers: 403, manageEvents: 204, manageCameras: 403 },
+  VIEWER: { manageUsers: 403, manageEvents: 403, manageCameras: 403 },
 };
 
 describe.each(Object.entries(statuses) as [UserRole, (typeof statuses)[UserRole]][])(
@@ -27,6 +30,9 @@ describe.each(Object.entries(statuses) as [UserRole, (typeof statuses)[UserRole]
     });
     app.get('/users', requirePermission('users:manage'), (_req, res) => res.status(204).send());
     app.get('/events', requirePermission('events:manage'), (_req, res) => res.status(204).send());
+    app.post('/cameras', requirePermission('cameras:manage'), (_req, res) =>
+      res.status(204).send(),
+    );
     app.use(
       (
         error: { status?: number },
@@ -39,6 +45,7 @@ describe.each(Object.entries(statuses) as [UserRole, (typeof statuses)[UserRole]
     it('applies the permission matrix', async () => {
       expect((await request(app).get('/users')).status).toBe(expected.manageUsers);
       expect((await request(app).get('/events')).status).toBe(expected.manageEvents);
+      expect((await request(app).post('/cameras')).status).toBe(expected.manageCameras);
     });
   },
 );
