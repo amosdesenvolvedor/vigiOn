@@ -1,0 +1,383 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "foreignKeys"
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum PlatformUserRole {
+  SUPER_ADMIN
+  SUPPORT
+  AUDITOR
+}
+
+enum CameraStatus {
+  PENDING
+  ONLINE
+  OFFLINE
+  DISABLED
+  ERROR
+}
+
+enum CameraConnectionType {
+  DIRECT
+  GATEWAY
+  CLOUD
+}
+
+enum CameraProtocol {
+  RTSP
+  ONVIF
+  HTTP
+  HTTPS
+  PROPRIETARY
+  OTHER
+}
+
+enum EventSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum EventStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  READ
+}
+
+enum StorageFileType {
+  IMAGE
+  SNAPSHOT
+  VIDEO
+  RECORDING
+  EVENT_EVIDENCE
+  OTHER
+}
+
+enum PlanInterval {
+  MONTHLY
+  YEARLY
+  CUSTOM
+}
+
+enum PlanStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+model Organization {
+  id           String             @id @default(uuid()) @db.Char(36)
+  name         String             @db.VarChar(160)
+  slug         String             @unique @db.VarChar(100)
+  status       OrganizationStatus @default(ACTIVE)
+  timezone     String             @default("UTC") @db.VarChar(64)
+  deletedAt    DateTime?          @db.DateTime(3)
+  createdAt    DateTime           @default(now()) @db.DateTime(3)
+  updatedAt    DateTime           @updatedAt @db.DateTime(3)
+  customer     CustomerProfile?
+  users        User[]
+  cameras      Camera[]
+  events       CameraEvent[]
+  notifications Notification[]
+  storageFiles StorageFile[]
+  subscriptions Subscription[]
+  storageUsage StorageUsage?
+  auditLogs    AuditLog[]
+
+  @@index([status, deletedAt])
+}
+
+model CustomerProfile {
+  id             String       @id @default(uuid()) @db.Char(36)
+  organizationId String       @unique @db.Char(36)
+  legalName      String?      @db.VarChar(180)
+  taxId          String?      @db.VarChar(40)
+  contactEmail   String?      @db.VarChar(254)
+  contactPhone   String?      @db.VarChar(32)
+  metadata       Json?
+  createdAt      DateTime     @default(now()) @db.DateTime(3)
+  updatedAt      DateTime     @updatedAt @db.DateTime(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id              String       @id @default(uuid()) @db.Char(36)
+  organizationId  String       @db.Char(36)
+  name            String       @db.VarChar(160)
+  email           String       @db.VarChar(254)
+  normalizedEmail String       @unique @db.VarChar(254)
+  passwordHash    String       @db.VarChar(255)
+  role            UserRole     @default(VIEWER)
+  status          UserStatus   @default(INVITED)
+  timezone        String?      @db.VarChar(64)
+  lastLoginAt     DateTime?    @db.DateTime(3)
+  deletedAt       DateTime?    @db.DateTime(3)
+  createdAt       DateTime     @default(now()) @db.DateTime(3)
+  updatedAt       DateTime     @updatedAt @db.DateTime(3)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  notifications   Notification[]
+  auditLogs        AuditLog[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, status, deletedAt])
+  @@index([organizationId, role])
+}
+
+model PlatformUser {
+  id              String           @id @default(uuid()) @db.Char(36)
+  name            String           @db.VarChar(160)
+  email           String           @db.VarChar(254)
+  normalizedEmail String           @unique @db.VarChar(254)
+  passwordHash    String           @db.VarChar(255)
+  role            PlatformUserRole @default(SUPPORT)
+  active          Boolean          @default(true)
+  lastLoginAt     DateTime?        @db.DateTime(3)
+  createdAt       DateTime         @default(now()) @db.DateTime(3)
+  updatedAt       DateTime         @updatedAt @db.DateTime(3)
+}
+
+model Camera {
+  id               String               @id @default(uuid()) @db.Char(36)
+  organizationId   String               @db.Char(36)
+  name             String               @db.VarChar(160)
+  description      String?              @db.Text
+  location         String?              @db.VarChar(255)
+  status           CameraStatus         @default(PENDING)
+  connectionType   CameraConnectionType @default(DIRECT)
+  protocol         CameraProtocol
+  manufacturer     String?              @db.VarChar(100)
+  model            String?              @db.VarChar(100)
+  identifier       String               @db.VarChar(191)
+  lastSeenAt       DateTime?            @db.DateTime(3)
+  deletedAt        DateTime?            @db.DateTime(3)
+  createdAt        DateTime             @default(now()) @db.DateTime(3)
+  updatedAt        DateTime             @updatedAt @db.DateTime(3)
+  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  credential       CameraCredential?
+  events           CameraEvent[]
+  storageFiles     StorageFile[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, identifier])
+  @@index([organizationId, status, deletedAt])
+  @@index([organizationId, lastSeenAt])
+}
+
+model CameraCredential {
+  id             String   @id @default(uuid()) @db.Char(36)
+  organizationId String   @db.Char(36)
+  cameraId       String   @unique @db.Char(36)
+  ciphertext     Bytes    @db.LongBlob
+  initializationVector Bytes @db.VarBinary(32)
+  authenticationTag Bytes @db.VarBinary(32)
+  keyVersion     Int      @default(1)
+  createdAt      DateTime @default(now()) @db.DateTime(3)
+  updatedAt      DateTime @updatedAt @db.DateTime(3)
+  camera         Camera   @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, cameraId])
+  @@index([organizationId])
+}
+
+model CameraEvent {
+  id             String        @id @default(uuid()) @db.Char(36)
+  organizationId String        @db.Char(36)
+  cameraId       String        @db.Char(36)
+  type           String        @db.VarChar(80)
+  severity       EventSeverity @default(INFO)
+  status         EventStatus   @default(OPEN)
+  detectedAt     DateTime      @db.DateTime(3)
+  acknowledgedAt DateTime?     @db.DateTime(3)
+  resolvedAt     DateTime?     @db.DateTime(3)
+  metadata       Json?
+  createdAt      DateTime      @default(now()) @db.DateTime(3)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  camera         Camera        @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Restrict)
+  notifications  Notification[]
+  storageFiles   StorageFile[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, detectedAt])
+  @@index([organizationId, status, severity, detectedAt])
+  @@index([organizationId, cameraId, detectedAt])
+  @@index([cameraId, detectedAt])
+}
+
+model Notification {
+  id             String               @id @default(uuid()) @db.Char(36)
+  organizationId String               @db.Char(36)
+  userId         String               @db.Char(36)
+  eventId        String?              @db.Char(36)
+  channel        NotificationChannel  @default(IN_APP)
+  title          String               @db.VarChar(180)
+  message        String               @db.Text
+  priority       NotificationPriority @default(NORMAL)
+  status         NotificationStatus   @default(PENDING)
+  readAt         DateTime?            @db.DateTime(3)
+  sentAt         DateTime?            @db.DateTime(3)
+  createdAt      DateTime             @default(now()) @db.DateTime(3)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user           User                 @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Restrict)
+  event          CameraEvent?         @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, userId, status, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, eventId])
+}
+
+model StorageFile {
+  id              String          @id @default(uuid()) @db.Char(36)
+  organizationId  String          @db.Char(36)
+  cameraId        String?         @db.Char(36)
+  eventId         String?         @db.Char(36)
+  type            StorageFileType
+  storageProvider String          @db.VarChar(60)
+  storageKey      String          @db.VarChar(768)
+  fileName        String          @db.VarChar(255)
+  mimeType        String          @db.VarChar(127)
+  sizeBytes       BigInt
+  durationSeconds Int?
+  checksum        String?         @db.VarChar(128)
+  createdAt       DateTime        @default(now()) @db.DateTime(3)
+  expiresAt       DateTime?       @db.DateTime(3)
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  camera          Camera?         @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Restrict)
+  event           CameraEvent?    @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([storageProvider, storageKey])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, type, createdAt])
+  @@index([organizationId, cameraId, createdAt])
+  @@index([organizationId, eventId])
+  @@index([expiresAt])
+}
+
+model Plan {
+  id                  String       @id @default(uuid()) @db.Char(36)
+  name                String       @db.VarChar(100)
+  slug                String       @unique @db.VarChar(64)
+  priceCents          Int?
+  currency            String       @default("BRL") @db.Char(3)
+  billingInterval     PlanInterval @default(MONTHLY)
+  maxCameras          Int
+  maxStorageBytes     BigInt
+  retentionDays       Int
+  maxUsers            Int
+  enabledFeatures     Json
+  status              PlanStatus   @default(ACTIVE)
+  createdAt           DateTime     @default(now()) @db.DateTime(3)
+  updatedAt           DateTime     @updatedAt @db.DateTime(3)
+  subscriptions       Subscription[]
+
+  @@index([status])
+}
+
+model Subscription {
+  id                 String             @id @default(uuid()) @db.Char(36)
+  organizationId     String             @db.Char(36)
+  planId             String             @db.Char(36)
+  status             SubscriptionStatus @default(TRIAL)
+  startedAt          DateTime           @default(now()) @db.DateTime(3)
+  currentPeriodStart DateTime           @db.DateTime(3)
+  currentPeriodEnd   DateTime           @db.DateTime(3)
+  canceledAt         DateTime?          @db.DateTime(3)
+  trialEndsAt        DateTime?          @db.DateTime(3)
+  createdAt          DateTime           @default(now()) @db.DateTime(3)
+  updatedAt          DateTime           @updatedAt @db.DateTime(3)
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan               Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status])
+  @@index([organizationId, currentPeriodEnd])
+  @@index([planId, status])
+}
+
+model StorageUsage {
+  id             String       @id @default(uuid()) @db.Char(36)
+  organizationId String       @unique @db.Char(36)
+  usedBytes      BigInt       @default(0)
+  fileCount      BigInt       @default(0)
+  version        Int          @default(0)
+  calculatedAt   DateTime     @default(now()) @db.DateTime(3)
+  updatedAt      DateTime     @updatedAt @db.DateTime(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id             String        @id @default(uuid()) @db.Char(36)
+  organizationId String?       @db.Char(36)
+  actorUserId    String?       @db.Char(36)
+  action         String        @db.VarChar(100)
+  entityType     String        @db.VarChar(100)
+  entityId       String?       @db.VarChar(191)
+  metadata       Json?
+  ipAddress      String?       @db.VarChar(45)
+  userAgent      String?       @db.VarChar(512)
+  createdAt      DateTime      @default(now()) @db.DateTime(3)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actorUser      User?         @relation(fields: [organizationId, actorUserId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, action, createdAt])
+  @@index([organizationId, entityType, entityId])
+  @@index([actorUserId, createdAt])
+}

@@ -1,0 +1,39 @@
+{
+  "name": "vigioni",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fundação do SaaS multi-tenant de monitoramento VigiOn",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @vigioni/api\" \"npm run dev -w @vigioni/web\"",
+    "dev:api": "npm run dev -w @vigioni/api",
+    "dev:web": "npm run dev -w @vigioni/web",
+    "build": "npm run build -w @vigioni/shared && npm run build -w @vigioni/api && npm run build -w @vigioni/web",
+    "typecheck": "npm run build -w @vigioni/shared && npm run typecheck -w @vigioni/api && npm run typecheck -w @vigioni/web",
+    "lint": "npm run lint -ws --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "prisma validate",
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:seed": "prisma db seed",
+    "test": "npm run test -w @vigioni/api"
+  },
+  "engines": {
+    "node": ">=18.18.0",
+    "npm": ">=9"
+  },
+  "devDependencies": {
+    "@prisma/client": "5.22.0",
+    "concurrently": "8.2.2",
+    "prettier": "3.3.3",
+    "prisma": "5.22.0",
+    "tsx": "4.19.2"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
