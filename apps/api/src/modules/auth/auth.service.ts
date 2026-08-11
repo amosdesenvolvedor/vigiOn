@@ -118,6 +118,16 @@ export class AuthService {
         data: {
           organizationId: organization.id,
           actorUserId: createdUser.id,
+          action: 'ORGANIZATION_CREATED',
+          entityType: 'Organization',
+          entityId: organization.id,
+          ...metadata,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: organization.id,
+          actorUserId: createdUser.id,
           action: 'REGISTER',
           entityType: 'User',
           entityId: createdUser.id,

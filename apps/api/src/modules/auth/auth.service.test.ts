@@ -82,6 +82,11 @@ describe('authentication lifecycle', () => {
     await expect(
       prisma.subscription.findFirst({ where: { organizationId: result.user.organizationId } }),
     ).resolves.toMatchObject({ status: 'TRIAL' });
+    await expect(
+      prisma.auditLog.findFirst({
+        where: { organizationId: result.user.organizationId, action: 'ORGANIZATION_CREATED' },
+      }),
+    ).resolves.toMatchObject({ entityId: result.user.organizationId });
   });
 
   it('logs in valid users and rejects wrong, missing, and inactive accounts identically', async () => {
