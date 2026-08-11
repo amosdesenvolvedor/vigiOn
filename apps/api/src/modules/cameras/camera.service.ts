@@ -65,6 +65,11 @@ const cameraSelect = {
   model: true,
   identifier: true,
   lastSeenAt: true,
+  motionEnabled: true,
+  motionSensitivity: true,
+  motionSampleFps: true,
+  motionCooldownSeconds: true,
+  captureSnapshotOnMotion: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.CameraSelect;
@@ -230,6 +235,52 @@ export class CameraService {
           action: status === 'DISABLED' ? 'CAMERA_DISABLED' : 'CAMERA_ENABLED',
           entityType: 'Camera',
           entityId: id,
+          ...metadata,
+        },
+      });
+      return camera;
+    });
+  }
+
+  async updateMotionConfiguration(
+    context: TenantContext,
+    id: string,
+    input: {
+      enabled: boolean;
+      sensitivity: 'LOW' | 'MEDIUM' | 'HIGH';
+      sampleFps: number;
+      cooldownSeconds: number;
+      captureSnapshot: boolean;
+    },
+    metadata: RequestMetadata,
+  ) {
+    await this.get(context, id);
+    return this.prisma.$transaction(async (tx) => {
+      const camera = await tx.camera.update({
+        where: { id },
+        data: {
+          motionEnabled: input.enabled,
+          motionSensitivity: input.sensitivity,
+          motionSampleFps: input.sampleFps,
+          motionCooldownSeconds: input.cooldownSeconds,
+          captureSnapshotOnMotion: input.captureSnapshot,
+        },
+        select: cameraSelect,
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: context.organizationId,
+          actorUserId: context.userId,
+          action: 'CAMERA_MOTION_CONFIGURATION_CHANGED',
+          entityType: 'Camera',
+          entityId: id,
+          metadata: {
+            enabled: input.enabled,
+            sensitivity: input.sensitivity,
+            sampleFps: input.sampleFps,
+            cooldownSeconds: input.cooldownSeconds,
+            captureSnapshot: input.captureSnapshot,
+          },
           ...metadata,
         },
       });

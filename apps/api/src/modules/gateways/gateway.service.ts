@@ -5,6 +5,9 @@ import { AuthError } from '../auth/auth.errors';
 import type { RequestMetadata } from '../auth/auth.types';
 import type { TenantContext } from '../tenancy/tenant-context';
 import { createGatewaySecret, hashGatewaySecret, hashPairingCode } from './gateway.secret';
+import { EventService } from '../events/event.service';
+import { CameraCredentialService } from '../cameras/camera-credential.service';
+import { encryptForGateway } from '../streams/stream-envelope';
 
 const fail = (status: number, code: string, message: string) =>
   new AuthError(status, code, message);
@@ -23,7 +26,11 @@ const gatewaySelect = {
 } satisfies Prisma.GatewaySelect;
 
 export class GatewayService {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly events: EventService;
+  private readonly credentials = new CameraCredentialService();
+  constructor(private readonly prisma: PrismaClient) {
+    this.events = new EventService(prisma);
+  }
 
   async generatePairing(context: TenantContext, metadata: RequestMetadata) {
     const raw = randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase();
@@ -121,21 +128,12 @@ export class GatewayService {
     };
   }
 
-  private async reconcileOffline(organizationId?: string) {
-    const cutoff = new Date(Date.now() - env.GATEWAY_OFFLINE_TIMEOUT_SECONDS * 1000);
-    await this.prisma.gateway.updateMany({
-      where: {
-        ...(organizationId ? { organizationId } : {}),
-        status: { in: ['ONLINE', 'CONNECTING'] },
-        lastSeenAt: { lt: cutoff },
-        deletedAt: null,
-      },
-      data: { status: 'OFFLINE' },
-    });
+  private async reconcileOffline() {
+    await this.events.reconcileOfflineGateways();
   }
 
   async list(context: TenantContext) {
-    await this.reconcileOffline(context.organizationId);
+    await this.reconcileOffline();
     return this.prisma.gateway.findMany({
       where: { organizationId: context.organizationId, deletedAt: null },
       select: gatewaySelect,
@@ -143,7 +141,7 @@ export class GatewayService {
     });
   }
   async get(context: TenantContext, id: string) {
-    await this.reconcileOffline(context.organizationId);
+    await this.reconcileOffline();
     const gateway = await this.prisma.gateway.findFirst({
       where: { id, organizationId: context.organizationId, deletedAt: null },
       select: {
@@ -328,6 +326,10 @@ export class GatewayService {
     },
   ) {
     if (!auth) throw fail(401, 'GATEWAY_UNAUTHORIZED', 'Gateway authentication required');
+    const previous = await this.prisma.gateway.findUnique({
+      where: { id: auth.gatewayId },
+      select: { status: true },
+    });
     let duplicate = false;
     try {
       await this.prisma.gatewayMessage.create({
@@ -357,6 +359,7 @@ export class GatewayService {
             : {}),
         },
       });
+    if (!duplicate && previous) await this.events.gatewayOnline(auth, previous.status);
     console.info(
       JSON.stringify({ event: 'gateway.heartbeat', gatewayId: auth.gatewayId, duplicate }),
     );
@@ -366,6 +369,47 @@ export class GatewayService {
       serverTimestamp: new Date(),
       nextHeartbeatSeconds: Math.max(15, Math.floor(env.GATEWAY_OFFLINE_TIMEOUT_SECONDS / 3)),
     };
+  }
+
+  async monitoringConfiguration(auth: NonNullable<Express.Request['gatewayAuth']>) {
+    const gateway = await this.prisma.gateway.findFirst({
+      where: { id: auth.gatewayId, organizationId: auth.organizationId, deletedAt: null },
+      select: { encryptionPublicKey: true },
+    });
+    if (!gateway?.encryptionPublicKey) return { revision: new Date().toISOString(), cameras: [] };
+    const cameras = await this.prisma.camera.findMany({
+      where: {
+        organizationId: auth.organizationId,
+        gatewayId: auth.gatewayId,
+        administrativeStatus: 'ACTIVE',
+        motionEnabled: true,
+        protocol: 'RTSP',
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        motionSensitivity: true,
+        motionSampleFps: true,
+        motionCooldownSeconds: true,
+        captureSnapshotOnMotion: true,
+        updatedAt: true,
+      },
+    });
+    const configured = [];
+    for (const camera of cameras) {
+      const source = await this.credentials.retrieveForBackend(auth.organizationId, camera.id);
+      if (!source?.stream) continue;
+      configured.push({
+        cameraId: camera.id,
+        sensitivity: camera.motionSensitivity,
+        sampleFps: camera.motionSampleFps,
+        cooldownSeconds: camera.motionCooldownSeconds,
+        captureSnapshot: camera.captureSnapshotOnMotion,
+        updatedAt: camera.updatedAt,
+        encryptedSource: encryptForGateway(gateway.encryptionPublicKey, source),
+      });
+    }
+    return { revision: new Date().toISOString(), cameras: configured };
   }
   async pollCommands(auth: NonNullable<Express.Request['gatewayAuth']>) {
     const now = new Date();

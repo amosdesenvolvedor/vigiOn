@@ -18,6 +18,11 @@ type Camera = {
   model: string | null;
   identifier: string | null;
   lastSeenAt: string | null;
+  motionEnabled: boolean;
+  motionSensitivity: 'LOW' | 'MEDIUM' | 'HIGH';
+  motionSampleFps: number;
+  motionCooldownSeconds: number;
+  captureSnapshotOnMotion: boolean;
 };
 
 const emptyForm = {
@@ -51,6 +56,7 @@ export function CameraPanel() {
   const [message, setMessage] = useState('');
   const [viewing, setViewing] = useState<Camera | null>(null);
   const [mediaCamera, setMediaCamera] = useState<Camera | null>(null);
+  const [motionCamera, setMotionCamera] = useState<Camera | null>(null);
   const canManage = user?.role === 'OWNER' || user?.role === 'ADMIN';
 
   const load = useCallback(async () => {
@@ -166,6 +172,28 @@ export function CameraPanel() {
     await apiRequest(`/cameras/${camera.id}`, { method: 'DELETE' });
     await load();
   };
+  const saveMotion = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!motionCamera) return;
+    const data = new FormData(event.currentTarget);
+    try {
+      await apiRequest(`/cameras/${motionCamera.id}/motion`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          enabled: data.get('enabled') === 'on',
+          sensitivity: data.get('sensitivity'),
+          sampleFps: Number(data.get('sampleFps')),
+          cooldownSeconds: Number(data.get('cooldownSeconds')),
+          captureSnapshot: data.get('captureSnapshot') === 'on',
+        }),
+      });
+      setMotionCamera(null);
+      setMessage('Configuração de movimento atualizada.');
+      await load();
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  };
 
   return (
     <section className="mb-12 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:p-6">
@@ -259,6 +287,9 @@ export function CameraPanel() {
                 <>
                   <button onClick={() => openEdit(camera)} className="text-emerald-300">
                     Configurar
+                  </button>
+                  <button onClick={() => setMotionCamera(camera)} className="text-cyan-300">
+                    Movimento
                   </button>
                   <button onClick={() => void setStatus(camera)} className="text-amber-300">
                     {camera.administrativeStatus === 'ACTIVE' ? 'Desativar' : 'Ativar'}
@@ -462,6 +493,75 @@ export function CameraPanel() {
           cameraName={viewing.name}
           onClose={() => setViewing(null)}
         />
+      )}
+      {motionCamera && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 p-4">
+          <form
+            onSubmit={saveMotion}
+            className="mx-auto my-12 max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6"
+          >
+            <div className="flex justify-between">
+              <h2 className="text-xl font-bold">Detecção de movimento</h2>
+              <button type="button" onClick={() => setMotionCamera(null)}>
+                Fechar
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-slate-400">{motionCamera.name}</p>
+            <label className="mt-6 flex gap-3 text-sm">
+              <input name="enabled" type="checkbox" defaultChecked={motionCamera.motionEnabled} />
+              Ativar detecção independente da visualização
+            </label>
+            <label className="mt-5 block text-sm">
+              Sensibilidade
+              <select
+                name="sensitivity"
+                defaultValue={motionCamera.motionSensitivity}
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+              >
+                <option value="LOW">Baixa</option>
+                <option value="MEDIUM">Média</option>
+                <option value="HIGH">Alta</option>
+              </select>
+            </label>
+            <label className="mt-4 block text-sm">
+              Amostras por segundo
+              <input
+                name="sampleFps"
+                type="number"
+                min="1"
+                max="5"
+                defaultValue={motionCamera.motionSampleFps}
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+              />
+            </label>
+            <label className="mt-4 block text-sm">
+              Tempo para encerrar o movimento (segundos)
+              <input
+                name="cooldownSeconds"
+                type="number"
+                min="3"
+                max="300"
+                defaultValue={motionCamera.motionCooldownSeconds}
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+              />
+            </label>
+            <label className="mt-5 flex gap-3 text-sm">
+              <input
+                name="captureSnapshot"
+                type="checkbox"
+                defaultChecked={motionCamera.captureSnapshotOnMotion}
+              />
+              Capturar snapshot representativo
+            </label>
+            <p className="mt-2 text-xs text-amber-300">
+              O snapshot automático será usado quando o gateway oferecer suporte ao vínculo de mídia
+              do evento.
+            </p>
+            <button className="mt-6 w-full rounded-lg bg-emerald-500 p-3 font-semibold text-slate-950">
+              Salvar monitoramento
+            </button>
+          </form>
+        </div>
       )}
       {mediaCamera && (
         <div className="fixed inset-0 z-40 overflow-y-auto bg-slate-950/95 p-4">

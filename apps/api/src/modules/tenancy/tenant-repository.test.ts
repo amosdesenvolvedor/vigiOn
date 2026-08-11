@@ -94,7 +94,8 @@ describe('data foundation and tenant isolation', () => {
         organizationId: organizationA.id,
         cameraId: camera.id,
         type: 'MOTION',
-        detectedAt: new Date(),
+        source: 'MOTION_DETECTOR',
+        occurredAt: new Date(),
       },
     });
     const notification = await prisma.notification.create({

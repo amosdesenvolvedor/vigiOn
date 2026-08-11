@@ -11,12 +11,22 @@ import { LocalQueue } from './local-queue';
 import { decryptStreamSource, type EncryptedStreamSource } from './stream-envelope';
 import { StreamManager } from './stream-manager';
 import { CaptureManager } from './capture-manager';
+import {
+  MotionMonitorManager,
+  type MonitoringConfiguration,
+  type EdgeEvent,
+} from './motion-monitor';
 
 const cloudUrl = process.env.VIGION_CLOUD_URL ?? 'https://vigion.cloud';
 if (process.env.NODE_ENV === 'production' && !cloudUrl.startsWith('https://'))
   throw new Error('Production gateway requires HTTPS');
 const configFile = process.env.VIGION_GATEWAY_CONFIG ?? './gateway-config.json';
 const queue = new LocalQueue(process.env.VIGION_GATEWAY_QUEUE ?? './gateway-queue.json');
+const eventQueue = new LocalQueue(
+  process.env.VIGION_EVENT_QUEUE ?? './gateway-events.json',
+  Number(process.env.VIGION_EVENT_QUEUE_LIMIT ?? 1000),
+  Number(process.env.VIGION_EVENT_TTL_SECONDS ?? 86_400) * 1000,
+);
 const connectors = new ConnectorRegistry();
 connectors.register(new RtspConnector());
 connectors.register(new PreparedConnector('ONVIF'));
@@ -219,8 +229,14 @@ const run = async () => {
     undefined,
     (assetId, errorCode) => reportAssetFailure(config, assetId, errorCode),
   );
+  const monitors = new MotionMonitorManager(
+    (event: EdgeEvent) => eventQueue.enqueue(event),
+    (source) => decryptStreamSource(config.encryptionPrivateKey, source),
+  );
   const shutdown = () => {
-    void Promise.all([streams.cleanup(), captures.cleanup()]).finally(() => process.exit(0));
+    void Promise.all([streams.cleanup(), captures.cleanup(), monitors.cleanup()]).finally(() =>
+      process.exit(0),
+    );
   };
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
@@ -245,9 +261,18 @@ const run = async () => {
         config,
       );
       await processCommands(config, streams, captures);
+      const monitoring = await request<{ cameras: MonitoringConfiguration[] }>(
+        '/monitoring-config',
+        { method: 'GET' },
+        config,
+      );
+      await monitors.sync(monitoring.cameras);
       await captures.flush();
       await queue.flush((payload) =>
         request('/commands/ack', { method: 'POST', body: JSON.stringify(payload) }, config),
+      );
+      await eventQueue.flush((payload) =>
+        request('/events', { method: 'POST', body: JSON.stringify(payload) }, config),
       );
       failures = 0;
       await new Promise((resolve) => setTimeout(resolve, config.heartbeatIntervalSeconds * 1000));

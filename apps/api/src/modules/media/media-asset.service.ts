@@ -146,6 +146,94 @@ export class MediaAssetService {
     }
   }
 
+  async requestForEvent(
+    organizationId: string,
+    cameraId: string,
+    gatewayId: string,
+    eventId: string,
+  ) {
+    const existing = await this.prisma.storageFile.findFirst({
+      where: { organizationId, eventId, type: 'SNAPSHOT' },
+    });
+    if (existing) return dto(existing);
+    await this.entitlements.requireFeature(organizationId, 'CLOUD_STORAGE');
+    const camera = await this.prisma.camera.findFirst({
+      where: {
+        id: cameraId,
+        organizationId,
+        gatewayId,
+        administrativeStatus: 'ACTIVE',
+        deletedAt: null,
+      },
+      include: { gateway: true },
+    });
+    if (!camera?.gateway?.encryptionPublicKey || camera.gateway.status !== 'ONLINE')
+      throw error(409, 'GATEWAY_OFFLINE', 'Gateway is offline');
+    const source = await this.credentials.retrieveForBackend(organizationId, cameraId);
+    if (!source?.stream)
+      throw error(409, 'CAMERA_STREAM_NOT_CONFIGURED', 'Camera stream is not configured');
+    const reservation = BigInt(env.SNAPSHOT_MAX_BYTES);
+    const { plan } = await this.entitlements.getEntitlements(organizationId);
+    await this.entitlements.reserveStorage(organizationId, reservation);
+    const assetId = randomUUID();
+    const now = new Date();
+    const storageKey = `organizations/${organizationId}/cameras/${cameraId}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${String(now.getUTCDate()).padStart(2, '0')}/${assetId}.jpg`;
+    try {
+      const asset = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.storageFile.create({
+          data: {
+            id: assetId,
+            organizationId,
+            cameraId,
+            gatewayId,
+            eventId,
+            idempotencyKey: eventId,
+            type: 'SNAPSHOT',
+            status: 'PENDING',
+            storageProvider: 's3',
+            storageKey,
+            fileName: `motion-${assetId}.jpg`,
+            mimeType: 'image/jpeg',
+            reservedBytes: reservation,
+            expiresAt: new Date(now.getTime() + plan.retentionDays * 86_400_000),
+          },
+        });
+        await tx.gatewayCommand.create({
+          data: {
+            organizationId,
+            gatewayId,
+            cameraId,
+            commandId: randomUUID(),
+            type: 'CAPTURE_SNAPSHOT',
+            payload: {
+              assetId,
+              cameraId,
+              encryptedSource: encryptForGateway(camera.gateway!.encryptionPublicKey!, source),
+              uploadPath: `/media-assets/${assetId}/content`,
+              maxBytes: reservation.toString(),
+            } as unknown as Prisma.InputJsonValue,
+            expiresAt: new Date(Date.now() + env.GATEWAY_COMMAND_TTL_SECONDS * 1000),
+          },
+        });
+        return created;
+      });
+      console.info(
+        JSON.stringify({
+          event: 'motion.snapshot_requested',
+          organizationId,
+          cameraId,
+          gatewayId,
+          eventId,
+          mediaAssetId: asset.id,
+        }),
+      );
+      return dto(asset);
+    } catch (caught) {
+      await this.entitlements.releaseStorage(organizationId, reservation);
+      throw caught;
+    }
+  }
+
   async stopRecording(context: TenantContext, assetId: string, metadata: RequestMetadata) {
     const asset = await this.find(context.organizationId, assetId);
     if (asset.type !== 'RECORDING') throw error(409, 'NOT_A_RECORDING', 'Asset is not a recording');

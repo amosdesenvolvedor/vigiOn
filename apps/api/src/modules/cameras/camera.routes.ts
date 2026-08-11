@@ -6,6 +6,7 @@ import type { RequestMetadata } from '../auth/auth.types';
 import {
   cameraCredentialsSchema,
   cameraListSchema,
+  motionConfigurationSchema,
   cameraStatusSchema,
   createCameraSchema,
   updateCameraSchema,
@@ -68,6 +69,25 @@ cameraRouter.patch('/:id', requirePermission('cameras:manage'), async (request, 
     next(error);
   }
 });
+
+cameraRouter.patch(
+  '/:id/motion',
+  requirePermission('cameras:manage'),
+  async (request, response, next) => {
+    try {
+      response.json({
+        camera: await service.updateMotionConfiguration(
+          request.auth!,
+          cameraId(request),
+          motionConfigurationSchema.parse(request.body),
+          metadata(request),
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 cameraRouter.patch(
   '/:id/status',

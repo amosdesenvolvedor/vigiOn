@@ -37,6 +37,9 @@ const envSchema = z.object({
   RECORDING_MAX_BYTES: z.coerce.number().int().min(1_048_576).default(67_108_864),
   RECORDING_SEGMENT_SECONDS: z.coerce.number().int().min(10).max(600).default(60),
   RETENTION_INTERVAL_SECONDS: z.coerce.number().int().min(30).max(86400).default(300),
+  EVENT_TIMESTAMP_SKEW_SECONDS: z.coerce.number().int().min(60).max(86400).default(3600),
+  EVENT_METADATA_MAX_BYTES: z.coerce.number().int().min(256).max(16384).default(4096),
+  GATEWAY_RECONCILE_INTERVAL_SECONDS: z.coerce.number().int().min(15).max(300).default(30),
 });
 
 const parsed = envSchema.safeParse(process.env);

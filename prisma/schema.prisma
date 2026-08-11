@@ -91,6 +91,21 @@ enum EventStatus {
   DISMISSED
 }
 
+enum CameraEventType {
+  MOTION
+  CAMERA_OFFLINE
+  CAMERA_ONLINE
+  GATEWAY_OFFLINE
+  GATEWAY_ONLINE
+}
+
+enum CameraEventSource {
+  MOTION_DETECTOR
+  CONNECTIVITY_MONITOR
+  GATEWAY_MONITOR
+  SYSTEM
+}
+
 enum NotificationChannel {
   IN_APP
   PUSH
@@ -381,29 +396,34 @@ model PlatformUser {
 }
 
 model Camera {
-  id                   String                     @id @default(uuid()) @db.Char(36)
-  organizationId       String                     @db.Char(36)
-  gatewayId            String?                    @db.Char(36)
-  name                 String                     @db.VarChar(160)
-  description          String?                    @db.Text
-  location             String?                    @db.VarChar(255)
-  administrativeStatus CameraAdministrativeStatus @default(ACTIVE)
-  connectionStatus     CameraConnectionStatus     @default(UNKNOWN)
-  connectionType       CameraConnectionType       @default(OTHER)
-  protocol             CameraProtocol
-  manufacturer         String?                    @db.VarChar(100)
-  model                String?                    @db.VarChar(100)
-  identifier           String?                    @db.VarChar(191)
-  lastSeenAt           DateTime?                  @db.DateTime(3)
-  deletedAt            DateTime?                  @db.DateTime(3)
-  createdAt            DateTime                   @default(now()) @db.DateTime(3)
-  updatedAt            DateTime                   @updatedAt @db.DateTime(3)
-  organization         Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  gateway              Gateway?                   @relation(fields: [gatewayId], references: [id], onDelete: SetNull)
-  credential           CameraCredential?
-  events               CameraEvent[]
-  storageFiles         StorageFile[]
-  streamSessions       StreamSession[]
+  id                      String                     @id @default(uuid()) @db.Char(36)
+  organizationId          String                     @db.Char(36)
+  gatewayId               String?                    @db.Char(36)
+  name                    String                     @db.VarChar(160)
+  description             String?                    @db.Text
+  location                String?                    @db.VarChar(255)
+  administrativeStatus    CameraAdministrativeStatus @default(ACTIVE)
+  connectionStatus        CameraConnectionStatus     @default(UNKNOWN)
+  connectionType          CameraConnectionType       @default(OTHER)
+  protocol                CameraProtocol
+  manufacturer            String?                    @db.VarChar(100)
+  model                   String?                    @db.VarChar(100)
+  identifier              String?                    @db.VarChar(191)
+  lastSeenAt              DateTime?                  @db.DateTime(3)
+  motionEnabled           Boolean                    @default(false)
+  motionSensitivity       String                     @default("MEDIUM") @db.VarChar(16)
+  motionSampleFps         Int                        @default(2)
+  motionCooldownSeconds   Int                        @default(10)
+  captureSnapshotOnMotion Boolean                    @default(false)
+  deletedAt               DateTime?                  @db.DateTime(3)
+  createdAt               DateTime                   @default(now()) @db.DateTime(3)
+  updatedAt               DateTime                   @updatedAt @db.DateTime(3)
+  organization            Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  gateway                 Gateway?                   @relation(fields: [gatewayId], references: [id], onDelete: SetNull)
+  credential              CameraCredential?
+  events                  CameraEvent[]
+  storageFiles            StorageFile[]
+  streamSessions          StreamSession[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, identifier])
@@ -436,6 +456,7 @@ model Gateway {
   pairingCodes        GatewayPairingCode[]
   streamSessions      StreamSession[]
   storageFiles        StorageFile[]
+  events              CameraEvent[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, deletedAt])
@@ -546,27 +567,35 @@ model CameraCredential {
 }
 
 model CameraEvent {
-  id             String         @id @default(uuid()) @db.Char(36)
-  organizationId String         @db.Char(36)
-  cameraId       String         @db.Char(36)
-  type           String         @db.VarChar(80)
-  severity       EventSeverity  @default(INFO)
-  status         EventStatus    @default(OPEN)
-  detectedAt     DateTime       @db.DateTime(3)
-  acknowledgedAt DateTime?      @db.DateTime(3)
-  resolvedAt     DateTime?      @db.DateTime(3)
-  metadata       Json?
-  createdAt      DateTime       @default(now()) @db.DateTime(3)
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  camera         Camera         @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Restrict)
-  notifications  Notification[]
-  storageFiles   StorageFile[]
+  id              String            @id @default(uuid()) @db.Char(36)
+  organizationId  String            @db.Char(36)
+  cameraId        String?           @db.Char(36)
+  gatewayId       String?           @db.Char(36)
+  externalEventId String?           @db.Char(36)
+  type            CameraEventType
+  source          CameraEventSource
+  severity        EventSeverity     @default(INFO)
+  status          EventStatus       @default(OPEN)
+  occurredAt      DateTime          @db.DateTime(3)
+  endedAt         DateTime?         @db.DateTime(3)
+  receivedAt      DateTime          @default(now()) @db.DateTime(3)
+  acknowledgedAt  DateTime?         @db.DateTime(3)
+  resolvedAt      DateTime?         @db.DateTime(3)
+  metadata        Json?
+  createdAt       DateTime          @default(now()) @db.DateTime(3)
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  camera          Camera?           @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Restrict)
+  gateway         Gateway?          @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
+  notifications   Notification[]
+  storageFiles    StorageFile[]
 
   @@unique([organizationId, id])
-  @@index([organizationId, detectedAt])
-  @@index([organizationId, status, severity, detectedAt])
-  @@index([organizationId, cameraId, detectedAt])
-  @@index([cameraId, detectedAt])
+  @@unique([gatewayId, externalEventId])
+  @@index([organizationId, occurredAt])
+  @@index([organizationId, status, severity, occurredAt])
+  @@index([organizationId, cameraId, occurredAt])
+  @@index([organizationId, gatewayId, occurredAt])
+  @@index([organizationId, type, occurredAt])
 }
 
 model Notification {

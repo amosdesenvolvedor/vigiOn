@@ -59,6 +59,16 @@ export const updateCameraSchema = z
 
 export const cameraStatusSchema = z.object({ status: z.enum(['ACTIVE', 'DISABLED']) }).strict();
 
+export const motionConfigurationSchema = z
+  .object({
+    enabled: z.boolean(),
+    sensitivity: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+    sampleFps: z.number().int().min(1).max(5).default(2),
+    cooldownSeconds: z.number().int().min(3).max(300).default(10),
+    captureSnapshot: z.boolean().default(false),
+  })
+  .strict();
+
 export const cameraListSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),

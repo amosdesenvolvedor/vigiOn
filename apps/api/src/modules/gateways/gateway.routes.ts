@@ -180,6 +180,13 @@ gatewayAgentRouter.get('/commands', limited(120), async (request, response, next
     next(error);
   }
 });
+gatewayAgentRouter.get('/monitoring-config', limited(120), async (request, response, next) => {
+  try {
+    response.json(await service.monitoringConfiguration(request.gatewayAuth!));
+  } catch (error) {
+    next(error);
+  }
+});
 gatewayAgentRouter.post('/commands/ack', limited(120), async (request, response, next) => {
   try {
     response.json(
