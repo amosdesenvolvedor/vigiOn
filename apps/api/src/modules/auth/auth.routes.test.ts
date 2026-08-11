@@ -14,7 +14,7 @@ beforeAll(async () => {
     data: { name: 'HTTP Security', slug: `http-security-${suffix}` },
   });
   organizationId = organization.id;
-  await prisma.user.create({
+  const user = await prisma.user.create({
     data: {
       organizationId,
       name: 'HTTP User',
@@ -25,10 +25,14 @@ beforeAll(async () => {
       status: 'ACTIVE',
     },
   });
+  await prisma.organizationMembership.create({
+    data: { organizationId, userId: user.id, role: 'OWNER', status: 'ACTIVE' },
+  });
 });
 
 afterAll(async () => {
   await prisma.auditLog.deleteMany({ where: { organizationId } });
+  await prisma.organizationMembership.deleteMany({ where: { organizationId } });
   await prisma.user.deleteMany({ where: { organizationId } });
   await prisma.organization.delete({ where: { id: organizationId } });
   await prisma.$disconnect();

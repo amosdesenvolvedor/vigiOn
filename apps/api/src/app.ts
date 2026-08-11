@@ -6,6 +6,7 @@ import { env } from './config/env';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
 import { healthRouter } from './routes/health';
 import { authRouter } from './modules/auth/auth.routes';
+import { organizationRouter } from './modules/organizations/organization.routes';
 
 export const createApp = () => {
   const app = express();
@@ -18,6 +19,7 @@ export const createApp = () => {
   app.get('/', (_request, response) => response.json({ service: 'vigioni-api' }));
   app.use('/api/v1/health', healthRouter);
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/organizations', organizationRouter);
   app.use(notFoundHandler);
   app.use(errorHandler);
 

@@ -155,6 +155,10 @@ describe('data foundation and tenant isolation', () => {
       id: camera.id,
     });
     await expect(tenantBRepository.findCameraById(camera.id)).resolves.toBeNull();
+    await expect(tenantBRepository.findEventById(event.id)).resolves.toBeNull();
+    await expect(tenantBRepository.findStorageFileById(file.id)).resolves.toBeNull();
+    await expect(tenantBRepository.findSubscriptionById(subscription.id)).resolves.toBeNull();
+    await expect(tenantBRepository.findAuditLogById(auditLog.id)).resolves.toBeNull();
 
     await expect(
       prisma.notification.create({

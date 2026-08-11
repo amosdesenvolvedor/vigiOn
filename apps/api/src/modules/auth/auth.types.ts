@@ -3,6 +3,7 @@ import type { UserRole } from '@prisma/client';
 export interface AuthenticatedUser {
   userId: string;
   organizationId: string;
+  membershipId: string;
   role: UserRole;
   sessionId: string;
 }
@@ -15,6 +16,7 @@ export interface RequestMetadata {
 export interface TokenDelivery {
   sendPasswordReset(email: string, token: string): Promise<void>;
   sendEmailVerification(email: string, token: string): Promise<void>;
+  sendOrganizationInvitation(email: string, organizationName: string, token: string): Promise<void>;
 }
 
 export interface AuthTokens {

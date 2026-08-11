@@ -1,5 +1,6 @@
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { AuthScreen } from './auth/AuthScreen';
+import { OrganizationPanel } from './organizations/OrganizationPanel';
 
 function ProtectedArea() {
   const { user, organization, loading, logout } = useAuth();
@@ -25,7 +26,7 @@ function ProtectedArea() {
             Sair
           </button>
         </header>
-        <section className="py-20">
+        <section className="pt-12">
           <p className="text-sm font-semibold uppercase tracking-[.2em] text-emerald-400">
             Sessão protegida
           </p>
@@ -35,6 +36,7 @@ function ProtectedArea() {
             etapa futura.
           </p>
         </section>
+        <OrganizationPanel />
       </div>
     </main>
   );

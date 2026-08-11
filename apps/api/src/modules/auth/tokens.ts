@@ -9,7 +9,12 @@ export const hashOpaqueToken = (token: string) => createHash('sha256').update(to
 
 export function createAccessToken(payload: AuthenticatedUser) {
   return jwt.sign(
-    { organizationId: payload.organizationId, role: payload.role, sessionId: payload.sessionId },
+    {
+      organizationId: payload.organizationId,
+      membershipId: payload.membershipId,
+      role: payload.role,
+      sessionId: payload.sessionId,
+    },
     env.JWT_ACCESS_SECRET,
     { algorithm: 'HS256', expiresIn: env.ACCESS_TOKEN_TTL_SECONDS, subject: payload.userId },
   );
@@ -21,6 +26,7 @@ export function verifyAccessToken(token: string): AuthenticatedUser {
     typeof decoded === 'string' ||
     typeof decoded.sub !== 'string' ||
     typeof decoded.organizationId !== 'string' ||
+    typeof decoded.membershipId !== 'string' ||
     typeof decoded.sessionId !== 'string' ||
     !['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'].includes(String(decoded.role))
   ) {
@@ -29,6 +35,7 @@ export function verifyAccessToken(token: string): AuthenticatedUser {
   return {
     userId: decoded.sub,
     organizationId: decoded.organizationId,
+    membershipId: decoded.membershipId,
     sessionId: decoded.sessionId,
     role: decoded.role as UserRole,
   };

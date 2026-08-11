@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { PrismaClient, User } from '@prisma/client';
+import type { OrganizationMembership, PrismaClient, User } from '@prisma/client';
 import { env } from '../../config/env';
 import { AuthError, invalidCredentials } from './auth.errors';
 import { hashPassword, verifyPassword } from './password';
@@ -25,11 +25,15 @@ export class AuthService {
     private readonly delivery: TokenDelivery,
   ) {}
 
-  private async issueSession(user: User, metadata: RequestMetadata): Promise<AuthTokens> {
+  private async issueSession(
+    user: User,
+    membership: OrganizationMembership,
+    metadata: RequestMetadata,
+  ): Promise<AuthTokens> {
     const refreshToken = createOpaqueToken();
     const session = await this.prisma.session.create({
       data: {
-        organizationId: user.organizationId,
+        organizationId: membership.organizationId,
         userId: user.id,
         familyId: randomUUID(),
         tokenHash: hashOpaqueToken(refreshToken),
@@ -41,8 +45,9 @@ export class AuthService {
       refreshToken,
       accessToken: createAccessToken({
         userId: user.id,
-        organizationId: user.organizationId,
-        role: user.role,
+        organizationId: membership.organizationId,
+        membershipId: membership.id,
+        role: membership.role,
         sessionId: session.id,
       }),
       expiresIn: env.ACCESS_TOKEN_TTL_SECONDS,
@@ -90,6 +95,15 @@ export class AuthService {
           status: 'ACTIVE',
         },
       });
+      const membership = await tx.organizationMembership.create({
+        data: {
+          userId: createdUser.id,
+          organizationId: organization.id,
+          role: 'OWNER',
+          status: 'ACTIVE',
+        },
+      });
+      await tx.organizationSettings.create({ data: { organizationId: organization.id } });
       await tx.subscription.create({
         data: {
           organizationId: organization.id,
@@ -110,19 +124,30 @@ export class AuthService {
           ...metadata,
         },
       });
-      return createdUser;
+      return { user: createdUser, membership };
     });
 
-    const verificationToken = await this.createOneTimeToken(user, 'EMAIL_VERIFICATION');
+    const verificationToken = await this.createOneTimeToken(user.user, 'EMAIL_VERIFICATION');
     await this.deliverSafely(() =>
-      this.delivery.sendEmailVerification(user.email, verificationToken),
+      this.delivery.sendEmailVerification(user.user.email, verificationToken),
     );
-    return { user, tokens: await this.issueSession(user, metadata) };
+    return {
+      user: user.user,
+      membership: user.membership,
+      tokens: await this.issueSession(user.user, user.membership, metadata),
+    };
   }
 
   async login(email: string, password: string, metadata: RequestMetadata) {
     const user = await this.prisma.user.findUnique({
       where: { normalizedEmail: normalizeEmail(email) },
+      include: {
+        memberships: {
+          where: { status: 'ACTIVE', organization: { status: 'ACTIVE', deletedAt: null } },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+        },
+      },
     });
     if (!user || !(await verifyPassword(user.passwordHash, password))) {
       await this.prisma.auditLog.create({
@@ -130,14 +155,16 @@ export class AuthService {
       });
       throw invalidCredentials();
     }
-    if (user.status !== 'ACTIVE' || user.deletedAt) throw invalidCredentials();
+    if (user.status !== 'ACTIVE' || user.deletedAt || !user.memberships[0])
+      throw invalidCredentials();
 
-    const tokens = await this.issueSession(user, metadata);
+    const membership = user.memberships[0];
+    const tokens = await this.issueSession(user, membership, metadata);
     await this.prisma.$transaction([
       this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
       this.prisma.auditLog.create({
         data: {
-          organizationId: user.organizationId,
+          organizationId: membership.organizationId,
           actorUserId: user.id,
           action: 'LOGIN_SUCCESS',
           entityType: 'Session',
@@ -145,7 +172,7 @@ export class AuthService {
         },
       }),
     ]);
-    return { user, tokens };
+    return { user, membership, tokens };
   }
 
   async refresh(rawToken: string, metadata: RequestMetadata): Promise<AuthTokens> {
@@ -173,6 +200,14 @@ export class AuthService {
       throw new AuthError(401, 'REFRESH_TOKEN_EXPIRED', 'Invalid session');
     }
 
+    const membership = await this.prisma.organizationMembership.findFirst({
+      where: {
+        userId: current.userId,
+        organizationId: current.organizationId,
+        status: 'ACTIVE',
+      },
+    });
+    if (!membership) throw new AuthError(401, 'UNAUTHORIZED', 'Authentication required');
     const nextToken = createOpaqueToken();
     const next = await this.prisma.$transaction(async (tx) => {
       const session = await tx.session.create({
@@ -197,7 +232,8 @@ export class AuthService {
       accessToken: createAccessToken({
         userId: current.userId,
         organizationId: current.organizationId,
-        role: current.user.role,
+        membershipId: membership.id,
+        role: membership.role,
         sessionId: next.id,
       }),
       expiresIn: env.ACCESS_TOKEN_TTL_SECONDS,

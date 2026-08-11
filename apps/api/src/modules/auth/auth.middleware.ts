@@ -17,15 +17,20 @@ export const authenticate: RequestHandler = async (request, _response, next) => 
         organizationId: auth.organizationId,
         revokedAt: null,
         expiresAt: { gt: new Date() },
-        user: {
-          status: 'ACTIVE',
-          deletedAt: null,
-          organization: { status: 'ACTIVE', deletedAt: null },
-        },
+        user: { status: 'ACTIVE', deletedAt: null },
       },
     });
     if (!session) throw new AuthError(401, 'UNAUTHORIZED', 'Authentication required');
-    request.auth = auth;
+    const membership = await prisma.organizationMembership.findFirst({
+      where: {
+        id: auth.membershipId,
+        userId: auth.userId,
+        organizationId: auth.organizationId,
+        status: 'ACTIVE',
+      },
+    });
+    if (!membership) throw new AuthError(401, 'UNAUTHORIZED', 'Authentication required');
+    request.auth = { ...auth, role: membership.role };
     next();
   } catch (error) {
     next(

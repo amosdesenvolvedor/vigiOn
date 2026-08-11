@@ -24,6 +24,16 @@ class ResendTokenDelivery implements TokenDelivery {
     );
   }
 
+  sendOrganizationInvitation(email: string, organizationName: string, token: string) {
+    const url = `${env.APP_URL}/?invitation=${encodeURIComponent(token)}`;
+    return this.send(
+      email,
+      `Convite para ${organizationName} no VigiOn`,
+      `Você foi convidado para participar de ${organizationName}. O convite expira em 72 horas:\n\n${url}`,
+      `<p>Você foi convidado para participar de <strong>${organizationName}</strong>.</p><p><a href="${url}">Aceitar convite</a></p><p>Este convite expira em 72 horas.</p>`,
+    );
+  }
+
   private async send(to: string, subject: string, text: string, html: string) {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -39,6 +49,9 @@ const unavailableDelivery: TokenDelivery = {
     throw new Error('Email delivery is not configured');
   },
   async sendEmailVerification() {
+    throw new Error('Email delivery is not configured');
+  },
+  async sendOrganizationInvitation() {
     throw new Error('Email delivery is not configured');
   },
 };

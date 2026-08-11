@@ -20,6 +20,24 @@ export class TenantRepository {
     });
   }
 
+  findStorageFileById(id: string) {
+    return this.client.storageFile.findFirst({ where: tenantWhere(this.context, { id }) });
+  }
+
+  findSubscriptionById(id: string) {
+    return this.client.subscription.findFirst({ where: tenantWhere(this.context, { id }) });
+  }
+
+  findAuditLogById(id: string) {
+    return this.client.auditLog.findFirst({ where: tenantWhere(this.context, { id }) });
+  }
+
+  findMembershipById(id: string) {
+    return this.client.organizationMembership.findFirst({
+      where: tenantWhere(this.context, { id, status: { not: 'REMOVED' as const } }),
+    });
+  }
+
   listNotifications() {
     return this.client.notification.findMany({
       where: tenantWhere(this.context, { userId: this.context.userId }),

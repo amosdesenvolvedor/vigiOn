@@ -98,6 +98,10 @@ openssl rand -base64 48
 
 Copie o resultado para `JWT_ACCESS_SECRET` no `.env`. Consulte [docs/authentication.md](docs/authentication.md) para endpoints, cookies e decisões de segurança.
 
+## Multi-tenancy
+
+Organizações, memberships, troca segura de tenant, gestão de membros, convites e configurações estão implementados com autorização revalidada no banco. Consulte [docs/multi-tenancy.md](docs/multi-tenancy.md) para as regras de isolamento e segurança.
+
 Em homologação/produção, o Compose inclui Caddy como proxy reverso, encaminha `/api/*` para a API e entrega o frontend no domínio com HTTPS automático. As portas internas `3000`, `5173` e `3306` ficam vinculadas apenas ao loopback da VM.
 
 ## Roadmap (18 etapas)

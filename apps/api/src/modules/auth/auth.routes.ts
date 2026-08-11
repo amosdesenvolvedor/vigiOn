@@ -68,9 +68,10 @@ authRouter.post('/register', sensitiveLimiter, async (request, response, next) =
   try {
     const input = registerSchema.parse(request.body);
     const result = await authService.register(input, metadata(request));
-    response
-      .status(201)
-      .json({ user: publicUser(result.user), session: setSession(response, result.tokens) });
+    response.status(201).json({
+      user: publicUser({ ...result.user, role: result.membership.role }),
+      session: setSession(response, result.tokens),
+    });
   } catch (error) {
     next(error);
   }
@@ -80,7 +81,10 @@ authRouter.post('/login', sensitiveLimiter, async (request, response, next) => {
   try {
     const input = loginSchema.parse(request.body);
     const result = await authService.login(input.email, input.password, metadata(request));
-    response.json({ user: publicUser(result.user), session: setSession(response, result.tokens) });
+    response.json({
+      user: publicUser({ ...result.user, role: result.membership.role }),
+      session: setSession(response, result.tokens),
+    });
   } catch (error) {
     next(error);
   }
@@ -179,10 +183,28 @@ authRouter.get('/me', authenticate, async (request, response, next) => {
         organizationId: request.auth!.organizationId,
         deletedAt: null,
       },
-      include: { organization: { select: { id: true, name: true, slug: true } } },
+      include: { organization: { select: { id: true, name: true, slug: true, status: true } } },
     });
     if (!user) throw new AuthError(401, 'UNAUTHORIZED', 'Authentication required');
-    response.json({ user: publicUser(user), organization: user.organization });
+    const membership = await prisma.organizationMembership.findFirst({
+      where: {
+        id: request.auth!.membershipId,
+        userId: user.id,
+        organizationId: request.auth!.organizationId,
+        status: 'ACTIVE',
+      },
+    });
+    const organization = await prisma.organization.findFirst({
+      where: { id: request.auth!.organizationId, status: 'ACTIVE', deletedAt: null },
+      select: { id: true, name: true, slug: true },
+    });
+    if (!membership || !organization)
+      throw new AuthError(403, 'ORGANIZATION_SUSPENDED', 'Organization is not active');
+    response.json({
+      user: publicUser({ ...user, role: membership.role }),
+      organization,
+      membership: { id: membership.id, role: membership.role, status: membership.status },
+    });
   } catch (error) {
     next(error);
   }

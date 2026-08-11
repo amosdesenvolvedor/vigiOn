@@ -16,6 +16,7 @@ const delivery: TokenDelivery = {
   async sendEmailVerification(_email, token) {
     delivered.verification = token;
   },
+  async sendOrganizationInvitation() {},
 };
 const service = new AuthService(prisma, delivery);
 const metadata = { ipAddress: '127.0.0.1', userAgent: 'Vitest' };
@@ -55,6 +56,15 @@ beforeAll(async () => {
 afterAll(async () => {
   if (organizationIds.length) {
     await prisma.auditLog.deleteMany({ where: { organizationId: { in: organizationIds } } });
+    await prisma.organizationInvitation.deleteMany({
+      where: { organizationId: { in: organizationIds } },
+    });
+    await prisma.organizationMembership.deleteMany({
+      where: { organizationId: { in: organizationIds } },
+    });
+    await prisma.organizationSettings.deleteMany({
+      where: { organizationId: { in: organizationIds } },
+    });
     await prisma.subscription.deleteMany({ where: { organizationId: { in: organizationIds } } });
     await prisma.storageUsage.deleteMany({ where: { organizationId: { in: organizationIds } } });
     await prisma.user.deleteMany({ where: { organizationId: { in: organizationIds } } });
@@ -66,7 +76,7 @@ afterAll(async () => {
 describe('authentication lifecycle', () => {
   it('registers an OWNER with FREE trial and rejects duplicate email', async () => {
     const result = await register('register');
-    expect(result.user.role).toBe('OWNER');
+    expect(result.membership.role).toBe('OWNER');
     expect(delivered.verification).toHaveLength(64);
     await expect(register('register')).rejects.toMatchObject({ code: 'ACCOUNT_EXISTS' });
     await expect(

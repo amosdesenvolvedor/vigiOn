@@ -16,7 +16,13 @@ describe.each(Object.entries(statuses) as [UserRole, (typeof statuses)[UserRole]
   (role, expected) => {
     const app = express();
     app.use((req, _res, next) => {
-      req.auth = { userId: 'user', organizationId: 'org', sessionId: 'session', role };
+      req.auth = {
+        userId: 'user',
+        organizationId: 'org',
+        membershipId: 'membership',
+        sessionId: 'session',
+        role,
+      };
       next();
     });
     app.get('/users', requirePermission('users:manage'), (_req, res) => res.status(204).send());
