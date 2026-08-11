@@ -15,6 +15,7 @@ export const createApp = () => {
   const app = express();
 
   app.disable('x-powered-by');
+  if (env.NODE_ENV === 'production') app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
   app.use(express.json({ limit: '1mb' }));
