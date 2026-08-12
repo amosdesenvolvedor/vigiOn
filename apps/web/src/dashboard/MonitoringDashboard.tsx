@@ -72,6 +72,10 @@ export function MonitoringDashboard() {
     }
   }, []);
   const realtime = useRealtime(load);
+  const acknowledge = async (id: string) => {
+    await apiRequest(`/alerts/${id}/acknowledge`, { method: 'POST' });
+    await load();
+  };
   useEffect(() => {
     void load();
     const timer = setInterval(() => void load(), 60_000);
@@ -211,6 +215,14 @@ export function MonitoringDashboard() {
                       </span>
                     </div>
                     <p className="text-sm text-slate-400">{a.message}</p>
+                    {a.status === 'OPEN' && (
+                      <button
+                        onClick={() => void acknowledge(a.id)}
+                        className="mt-2 text-sm text-emerald-300"
+                      >
+                        Reconhecer alerta
+                      </button>
+                    )}
                   </article>
                 ))}
               </div>

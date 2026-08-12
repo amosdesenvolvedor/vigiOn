@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, apiUrl } from '../auth/api';
 export type RealtimeState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
+export const realtimeInvalidationEvent = 'vigion:realtime-invalidation';
 export function useRealtime(onInvalidate: () => void) {
   const [state, setState] = useState<RealtimeState>('connecting');
   useEffect(() => {
@@ -19,7 +20,10 @@ export function useRealtime(onInvalidate: () => void) {
           setState('connected');
           onInvalidate();
         });
-        source.addEventListener('dashboard', () => onInvalidate());
+        source.addEventListener('dashboard', () => {
+          onInvalidate();
+          window.dispatchEvent(new Event(realtimeInvalidationEvent));
+        });
         source.onerror = () => {
           source?.close();
           source = null;

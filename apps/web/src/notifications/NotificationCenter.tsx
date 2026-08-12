@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '../auth/api';
+import { realtimeInvalidationEvent } from '../realtime/useRealtime';
 
 type Notification = {
   id: string;
@@ -64,7 +65,12 @@ export function NotificationCenter() {
   useEffect(() => {
     void load();
     const timer = setInterval(() => void load(), 30000);
-    return () => clearInterval(timer);
+    const refresh = () => void load();
+    window.addEventListener(realtimeInvalidationEvent, refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener(realtimeInvalidationEvent, refresh);
+    };
   }, [load]);
   const read = async (item: Notification) => {
     if (!item.readAt) await apiRequest(`/notifications/${item.id}/read`, { method: 'POST' });
