@@ -18,6 +18,7 @@ import {
   notificationRouter,
   preferenceRouter,
 } from './modules/notifications/notification.routes';
+import { intelligenceRouter } from './modules/intelligence/intelligence.routes';
 
 export const createApp = () => {
   const app = express();
@@ -44,6 +45,7 @@ export const createApp = () => {
   app.use('/api/v1/alerts', alertRouter);
   app.use('/api/v1/notifications', notificationRouter);
   app.use('/api/v1/notification-preferences', preferenceRouter);
+  app.use('/api/v1/intelligence', intelligenceRouter);
   app.use('/api/v1', streamRouter);
   app.use('/api/v1', mediaRouter);
   app.use(notFoundHandler);

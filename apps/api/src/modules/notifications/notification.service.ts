@@ -259,7 +259,11 @@ export class AlertService {
   async processEvent(eventId: string) {
     const event = await this.prisma.cameraEvent.findUnique({
       where: { id: eventId },
-      include: { camera: { select: { name: true } }, gateway: { select: { name: true } } },
+      include: {
+        camera: { select: { name: true } },
+        gateway: { select: { name: true } },
+        classifications: { orderBy: { engineVersion: 'desc' }, take: 1 },
+      },
     });
     if (!event) return null;
     const recovery = this.policy.recoveryFor(event.type);
@@ -286,9 +290,25 @@ export class AlertService {
     }
     if (!this.policy.shouldCreateAlert(event.type)) return null;
     const subject = event.camera?.name ?? event.gateway?.name ?? 'dispositivo';
+    const intelligence = event.classifications[0];
     const copy =
       event.type === 'MOTION'
-        ? { title: 'Movimento detectado', message: `Movimento detectado em ${subject}.` }
+        ? intelligence?.classification === 'POSSIBLE_INTRUSION'
+          ? {
+              title: 'Possível intrusão',
+              message: `${intelligence.explanation} Câmera: ${subject}.`,
+            }
+          : intelligence?.classification === 'OUT_OF_HOURS_ACTIVITY'
+            ? {
+                title: 'Atividade fora do horário',
+                message: `${intelligence.explanation} Câmera: ${subject}.`,
+              }
+            : intelligence?.classification === 'UNUSUAL_ACTIVITY'
+              ? {
+                  title: 'Atividade incomum',
+                  message: `${intelligence.explanation} Câmera: ${subject}.`,
+                }
+              : { title: 'Movimento detectado', message: `Movimento detectado em ${subject}.` }
         : event.type === 'CAMERA_OFFLINE'
           ? { title: 'Câmera offline', message: `A câmera ${subject} ficou offline.` }
           : { title: 'Gateway offline', message: `O gateway ${subject} ficou offline.` };
@@ -301,7 +321,12 @@ export class AlertService {
           eventId: event.id,
           cameraId: event.cameraId,
           gatewayId: event.gatewayId,
-          severity: event.severity,
+          severity:
+            intelligence?.riskLevel === 'VERY_HIGH'
+              ? 'HIGH'
+              : intelligence?.riskLevel === 'HIGH'
+                ? 'HIGH'
+                : event.severity,
           ...copy,
         },
       });
@@ -327,7 +352,7 @@ export class AlertService {
           const enabled = preference?.enabled ?? this.policy.defaultEnabled(event.type, channel);
           if (
             !enabled ||
-            !this.policy.meetsMinimum(event.severity, preference?.minimumSeverity ?? 'INFO')
+            !this.policy.meetsMinimum(created.severity, preference?.minimumSeverity ?? 'INFO')
           )
             continue;
           if (channel === 'EMAIL') {
@@ -351,7 +376,7 @@ export class AlertService {
               channel,
               title: copy.title,
               message: copy.message,
-              priority: event.severity === 'HIGH' ? 'HIGH' : 'NORMAL',
+              priority: created.severity === 'HIGH' ? 'HIGH' : 'NORMAL',
               status: channel === 'IN_APP' ? 'DELIVERED' : 'PENDING',
               ...(channel === 'IN_APP'
                 ? { deliveredAt: new Date() }

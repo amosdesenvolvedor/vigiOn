@@ -6,6 +6,7 @@ import { CameraPanel } from './cameras/CameraPanel';
 import { GatewayPanel } from './gateways/GatewayPanel';
 import { EventPanel } from './events/EventPanel';
 import { NotificationCenter } from './notifications/NotificationCenter';
+import { IntelligencePanel } from './intelligence/IntelligencePanel';
 
 function ProtectedArea() {
   const { user, organization, loading, logout } = useAuth();
@@ -44,6 +45,7 @@ function ProtectedArea() {
         <OrganizationPanel />
         <CameraPanel />
         <EventPanel />
+        <IntelligencePanel />
         <NotificationCenter />
         <GatewayPanel />
         <BillingPanel />

@@ -131,6 +131,10 @@ O gateway realiza amostragem leve de frames, agrega movimento contínuo e envia 
 
 Eventos acionáveis alimentam uma policy central, alertas com ciclo OPEN/ACKNOWLEDGED/RESOLVED e notificações in-app. E-mail via Resend é opt-in, assíncrono e restrito a endereços verificados; push permanece fora desta etapa por não existir base PWA. Consulte [docs/notifications-alerts.md](docs/notifications-alerts.md).
 
+## Inteligência contextual
+
+Eventos de movimento podem ser classificados por horário IANA, zonas de alta prioridade e persistência. O score determinístico representa prioridade operacional e mantém fatores explicáveis; não é probabilidade de crime. Consulte [docs/event-intelligence.md](docs/event-intelligence.md).
+
 Em homologação/produção, o Compose inclui Caddy como proxy reverso, encaminha `/api/*` para a API e entrega o frontend no domínio com HTTPS automático. As portas internas `3000`, `5173` e `3306` ficam vinculadas apenas ao loopback da VM.
 
 ## Roadmap (18 etapas)

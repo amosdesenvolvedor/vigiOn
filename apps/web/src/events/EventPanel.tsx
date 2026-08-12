@@ -12,6 +12,13 @@ type EventItem = {
   camera: { id: string; name: string; location: string | null } | null;
   gateway: { id: string; name: string } | null;
   storageFiles: Array<{ id: string; type: string; mimeType: string }>;
+  classifications: Array<{
+    classification: string;
+    riskScore: string;
+    riskLevel: string;
+    riskFactors: string[];
+    explanation: string;
+  }>;
 };
 const labels: Record<EventItem['type'], string> = {
   MOTION: 'Movimento detectado',
@@ -169,6 +176,22 @@ export function EventPanel() {
                 </div>
               )}
             </dl>
+            {selected.classifications[0] && (
+              <div className="mt-6 rounded-lg border border-amber-800 bg-amber-950/30 p-4">
+                <p className="font-semibold">
+                  Classificação: {selected.classifications[0].classification}
+                </p>
+                <p className="mt-1">Nível de risco: {selected.classifications[0].riskLevel}</p>
+                <p className="mt-2 text-sm text-slate-300">
+                  {selected.classifications[0].explanation}
+                </p>
+                <ul className="mt-2 list-disc pl-5 text-xs text-slate-400">
+                  {selected.classifications[0].riskFactors.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {snapshotUrl && (
               <img src={snapshotUrl} alt="Snapshot do evento" className="mt-6 w-full rounded-lg" />
             )}

@@ -135,6 +135,36 @@ enum AlertStatus {
   RESOLVED
 }
 
+enum MonitoringMode {
+  ALWAYS
+  SCHEDULED
+  DISABLED
+}
+
+enum ScheduleExceptionMode {
+  OPEN
+  CLOSED
+}
+
+enum ZonePriority {
+  NORMAL
+  HIGH
+}
+
+enum EventClassificationType {
+  NORMAL_ACTIVITY
+  OUT_OF_HOURS_ACTIVITY
+  UNUSUAL_ACTIVITY
+  POSSIBLE_INTRUSION
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
 enum StorageFileType {
   IMAGE
   SNAPSHOT
@@ -256,6 +286,10 @@ model Organization {
   resourceCounter         ResourceCounter?
   limitEvents             LimitEvent[]
   auditLogs               AuditLog[]
+  monitoringSchedules     MonitoringSchedule[]
+  scheduleExceptions      ScheduleException[]
+  cameraZones             CameraZone[]
+  eventClassifications    EventClassification[]
 
   @@index([status, deletedAt])
 }
@@ -434,6 +468,8 @@ model Camera {
   events                  CameraEvent[]
   storageFiles            StorageFile[]
   streamSessions          StreamSession[]
+  monitoringSchedules     MonitoringSchedule[]
+  cameraZones             CameraZone[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, identifier])
@@ -577,27 +613,28 @@ model CameraCredential {
 }
 
 model CameraEvent {
-  id              String            @id @default(uuid()) @db.Char(36)
-  organizationId  String            @db.Char(36)
-  cameraId        String?           @db.Char(36)
-  gatewayId       String?           @db.Char(36)
-  externalEventId String?           @db.Char(36)
+  id              String                @id @default(uuid()) @db.Char(36)
+  organizationId  String                @db.Char(36)
+  cameraId        String?               @db.Char(36)
+  gatewayId       String?               @db.Char(36)
+  externalEventId String?               @db.Char(36)
   type            CameraEventType
   source          CameraEventSource
-  severity        EventSeverity     @default(INFO)
-  status          EventStatus       @default(OPEN)
-  occurredAt      DateTime          @db.DateTime(3)
-  endedAt         DateTime?         @db.DateTime(3)
-  receivedAt      DateTime          @default(now()) @db.DateTime(3)
-  acknowledgedAt  DateTime?         @db.DateTime(3)
-  resolvedAt      DateTime?         @db.DateTime(3)
+  severity        EventSeverity         @default(INFO)
+  status          EventStatus           @default(OPEN)
+  occurredAt      DateTime              @db.DateTime(3)
+  endedAt         DateTime?             @db.DateTime(3)
+  receivedAt      DateTime              @default(now()) @db.DateTime(3)
+  acknowledgedAt  DateTime?             @db.DateTime(3)
+  resolvedAt      DateTime?             @db.DateTime(3)
   metadata        Json?
-  createdAt       DateTime          @default(now()) @db.DateTime(3)
-  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  camera          Camera?           @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Restrict)
-  gateway         Gateway?          @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
+  createdAt       DateTime              @default(now()) @db.DateTime(3)
+  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  camera          Camera?               @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Restrict)
+  gateway         Gateway?              @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
   notifications   Notification[]
   alert           Alert?
+  classifications EventClassification[]
   storageFiles    StorageFile[]
 
   @@unique([organizationId, id])
@@ -607,6 +644,86 @@ model CameraEvent {
   @@index([organizationId, cameraId, occurredAt])
   @@index([organizationId, gatewayId, occurredAt])
   @@index([organizationId, type, occurredAt])
+}
+
+model MonitoringSchedule {
+  id             String              @id @default(uuid()) @db.Char(36)
+  organizationId String              @db.Char(36)
+  cameraId       String?             @db.Char(36)
+  scopeKey       String              @db.VarChar(40)
+  mode           MonitoringMode      @default(SCHEDULED)
+  createdAt      DateTime            @default(now()) @db.DateTime(3)
+  updatedAt      DateTime            @updatedAt @db.DateTime(3)
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  camera         Camera?             @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Cascade)
+  intervals      ScheduleInterval[]
+  exceptions     ScheduleException[]
+
+  @@unique([organizationId, scopeKey])
+  @@index([organizationId])
+}
+
+model ScheduleInterval {
+  id          String             @id @default(uuid()) @db.Char(36)
+  scheduleId  String             @db.Char(36)
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+  schedule    MonitoringSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, weekday])
+}
+
+model ScheduleException {
+  id             String                @id @default(uuid()) @db.Char(36)
+  organizationId String                @db.Char(36)
+  scheduleId     String                @db.Char(36)
+  localDate      DateTime              @db.Date
+  mode           ScheduleExceptionMode
+  startMinute    Int?
+  endMinute      Int?
+  label          String?               @db.VarChar(120)
+  createdAt      DateTime              @default(now()) @db.DateTime(3)
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  schedule       MonitoringSchedule    @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, localDate])
+  @@index([organizationId, localDate])
+}
+
+model CameraZone {
+  id             String       @id @default(uuid()) @db.Char(36)
+  organizationId String       @db.Char(36)
+  cameraId       String       @db.Char(36)
+  name           String       @db.VarChar(120)
+  priority       ZonePriority @default(NORMAL)
+  polygon        Json
+  enabled        Boolean      @default(true)
+  createdAt      DateTime     @default(now()) @db.DateTime(3)
+  updatedAt      DateTime     @updatedAt @db.DateTime(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  camera         Camera       @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, cameraId, enabled])
+}
+
+model EventClassification {
+  id             String                  @id @default(uuid()) @db.Char(36)
+  organizationId String                  @db.Char(36)
+  eventId        String                  @db.Char(36)
+  classification EventClassificationType
+  riskScore      Decimal                 @db.Decimal(4, 3)
+  riskLevel      RiskLevel
+  riskFactors    Json
+  explanation    String                  @db.VarChar(500)
+  engineVersion  Int                     @default(1)
+  createdAt      DateTime                @default(now()) @db.DateTime(3)
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  event          CameraEvent             @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([eventId, engineVersion])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, classification, riskLevel, createdAt])
 }
 
 model Alert {

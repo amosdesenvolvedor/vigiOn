@@ -5,6 +5,7 @@ import type { TenantContext } from '../tenancy/tenant-context';
 import { MediaAssetService } from '../media/media-asset.service';
 import { S3ObjectStorageService } from '../media/object-storage.service';
 import { AlertService } from '../notifications/notification.service';
+import { IntelligenceService } from '../intelligence/intelligence.service';
 
 type GatewayAuth = NonNullable<Express.Request['gatewayAuth']>;
 type GatewayEventInput = {
@@ -26,14 +27,17 @@ const eventInclude = {
     take: 1,
     select: { id: true, type: true, mimeType: true, capturedAt: true },
   },
+  classifications: { orderBy: { engineVersion: 'desc' as const }, take: 1 },
 } satisfies Prisma.CameraEventInclude;
 
 export class EventService {
   private readonly media: MediaAssetService;
   private readonly alerts: AlertService;
+  private readonly intelligence: IntelligenceService;
   constructor(private readonly prisma: PrismaClient) {
     this.media = new MediaAssetService(prisma, new S3ObjectStorageService());
     this.alerts = new AlertService(prisma);
+    this.intelligence = new IntelligenceService(prisma);
   }
 
   private timestamp(value: string) {
@@ -178,7 +182,14 @@ export class EventService {
             }),
           ),
         );
-    if (!result.duplicate && result.event)
+    if (!result.duplicate && result.event) {
+      await this.intelligence
+        .process(result.event.id)
+        .catch(() =>
+          console.error(
+            JSON.stringify({ event: 'context.analysis_failed', eventId: result.event!.id }),
+          ),
+        );
       await this.alerts
         .processEvent(result.event.id)
         .catch(() =>
@@ -186,6 +197,7 @@ export class EventService {
             JSON.stringify({ event: 'alert.processing_failed', eventId: result.event!.id }),
           ),
         );
+    }
     return result;
   }
 
