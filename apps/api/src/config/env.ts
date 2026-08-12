@@ -47,6 +47,18 @@ const envSchema = z.object({
   WEB_PUSH_VAPID_PUBLIC_KEY: optionalSecret(40),
   WEB_PUSH_VAPID_PRIVATE_KEY: optionalSecret(40),
   WEB_PUSH_SUBJECT: z.string().default('mailto:security@vigion.cloud'),
+  BILLING_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  BILLING_ENVIRONMENT: z.enum(['test', 'production']).default('test'),
+  BILLING_PROVIDER: z.enum(['mercado_pago']).default('mercado_pago'),
+  MERCADO_PAGO_ACCESS_TOKEN: optionalSecret(20),
+  MERCADO_PAGO_WEBHOOK_SECRET: optionalSecret(20),
+  BILLING_SUCCESS_URL: z.string().url().default('http://localhost:5173/billing?result=success'),
+  BILLING_CANCEL_URL: z.string().url().default('http://localhost:5173/billing?result=cancel'),
+  BILLING_PENDING_URL: z.string().url().default('http://localhost:5173/billing?result=pending'),
+  BILLING_RECONCILE_INTERVAL_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
 });
 
 const parsed = envSchema.safeParse(process.env);

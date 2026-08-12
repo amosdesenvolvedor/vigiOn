@@ -6,6 +6,8 @@ type Section =
   | 'users'
   | 'plans'
   | 'subscriptions'
+  | 'payments'
+  | 'invoices'
   | 'cameras'
   | 'gateways'
   | 'storage'
@@ -26,6 +28,8 @@ const sections: Array<[Section, string]> = [
   ['users', 'Usuários'],
   ['plans', 'Planos'],
   ['subscriptions', 'Assinaturas'],
+  ['payments', 'Pagamentos'],
+  ['invoices', 'Faturas'],
   ['cameras', 'Câmeras'],
   ['gateways', 'Gateways'],
   ['storage', 'Storage'],

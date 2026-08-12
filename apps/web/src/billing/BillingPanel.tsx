@@ -25,6 +25,34 @@ interface Usage {
   storage: { usedBytes: string; reservedBytes: string; limitBytes: string; availableBytes: string };
   retentionDays: number;
 }
+interface Plan {
+  id: string;
+  name: string;
+  code: string;
+  priceCents: number | null;
+  currency: string;
+  maxCameras: number;
+  maxUsers: number;
+  maxStorageBytes: string;
+  retentionDays: number;
+}
+interface BillingHistory {
+  payments: Array<{
+    id: string;
+    status: string;
+    amountCents: number;
+    currency: string;
+    paymentMethod: string;
+    createdAt: string;
+  }>;
+  invoices: Array<{
+    id: string;
+    status: string;
+    amountCents: number;
+    currency: string;
+    createdAt: string;
+  }>;
+}
 
 const percent = (current: number, limit: number) =>
   limit <= 0 ? 100 : Math.min(100, Math.round((current / limit) * 100));
@@ -63,16 +91,47 @@ export function BillingPanel() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [features, setFeatures] = useState<string[]>([]);
   const [message, setMessage] = useState('');
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [history, setHistory] = useState<BillingHistory>({ payments: [], invoices: [] });
+  const [billingEnabled, setBillingEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const [subscriptionData, usageData, featureData] = await Promise.all([
-      apiRequest<{ subscription: Subscription }>('/subscription'),
-      apiRequest<{ usage: Usage }>('/subscription/usage'),
-      apiRequest<{ features: string[] }>('/subscription/features'),
-    ]);
+    const [subscriptionData, usageData, featureData, planData, billingConfig, billingHistory] =
+      await Promise.all([
+        apiRequest<{ subscription: Subscription }>('/subscription'),
+        apiRequest<{ usage: Usage }>('/subscription/usage'),
+        apiRequest<{ features: string[] }>('/subscription/features'),
+        apiRequest<{ plans: Plan[] }>('/plans'),
+        apiRequest<{ enabled: boolean }>('/billing/configuration'),
+        apiRequest<BillingHistory>('/billing/history?page=1&limit=10'),
+      ]);
     setSubscription(subscriptionData.subscription);
     setUsage(usageData.usage);
     setFeatures(featureData.features);
+    setPlans(planData.plans);
+    setBillingEnabled(billingConfig.enabled);
+    setHistory(billingHistory);
+  };
+  const checkout = async (planId: string) => {
+    if (!window.confirm('Confirma a abertura do checkout para este plano?')) return;
+    setBusy(true);
+    setMessage('Criando checkout seguro…');
+    try {
+      const result = await apiRequest<{ checkout: { checkoutUrl: string | null } }>(
+        '/billing/checkout',
+        {
+          method: 'POST',
+          headers: { 'idempotency-key': crypto.randomUUID() },
+          body: JSON.stringify({ planId }),
+        },
+      );
+      if (!result.checkout.checkoutUrl) throw new Error('Checkout indisponível');
+      window.location.assign(result.checkout.checkoutUrl);
+    } catch (error) {
+      setMessage((error as Error).message);
+      setBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -107,13 +166,11 @@ export function BillingPanel() {
             {usage.retentionDays} dias
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setMessage('O checkout será disponibilizado na etapa de pagamentos.')}
-          className="rounded-lg bg-emerald-500 px-4 py-2 font-semibold text-slate-950"
+        <span
+          className={`rounded-lg px-3 py-2 text-sm ${billingEnabled ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}`}
         >
-          Fazer upgrade
-        </button>
+          {billingEnabled ? 'Pagamentos disponíveis' : 'Pagamentos ainda não habilitados'}
+        </span>
       </div>
       {subscription.trial.state !== 'NONE' && (
         <p className="mt-4 rounded-lg bg-amber-400/10 p-3 text-sm text-amber-300">
@@ -140,6 +197,69 @@ export function BillingPanel() {
             {feature}
           </span>
         ))}
+      </div>
+      <div className="mt-8 border-t border-slate-800 pt-6">
+        <h3 className="font-semibold">Planos disponíveis</h3>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {plans.map((plan) => (
+            <article key={plan.id} className="rounded-lg border border-slate-800 p-4">
+              <div className="flex justify-between gap-3">
+                <strong>{plan.name}</strong>
+                <span>
+                  {plan.priceCents == null
+                    ? 'Preço não configurado'
+                    : plan.priceCents === 0
+                      ? 'Grátis'
+                      : new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: plan.currency,
+                        }).format(plan.priceCents / 100)}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-slate-400">
+                {plan.maxCameras} câmeras · {plan.maxUsers} usuários · {plan.retentionDays} dias
+              </p>
+              {user?.role === 'OWNER' &&
+                plan.code !== 'FREE' &&
+                plan.code !== subscription.plan.code && (
+                  <button
+                    disabled={!billingEnabled || !plan.priceCents || busy}
+                    onClick={() => void checkout(plan.id)}
+                    className="mt-4 min-h-11 rounded bg-emerald-600 px-4 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Escolher plano
+                  </button>
+                )}
+            </article>
+          ))}
+        </div>
+      </div>
+      <div className="mt-8 border-t border-slate-800 pt-6">
+        <h3 className="font-semibold">Histórico financeiro</h3>
+        {!history.payments.length && !history.invoices.length ? (
+          <p className="mt-3 text-sm text-slate-400">Nenhum pagamento ou fatura registrado.</p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {history.payments.map((payment) => (
+              <div
+                key={payment.id}
+                className="flex flex-wrap justify-between rounded border border-slate-800 p-3 text-sm"
+              >
+                <span>
+                  {new Date(payment.createdAt).toLocaleDateString('pt-BR')} ·{' '}
+                  {payment.paymentMethod}
+                </span>
+                <span>
+                  {new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: payment.currency,
+                  }).format(payment.amountCents / 100)}{' '}
+                  · {payment.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       {user?.role === 'OWNER' && (
         <div className="mt-6 flex gap-3 border-t border-slate-800 pt-5">

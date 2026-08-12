@@ -23,6 +23,7 @@ import { intelligenceRouter } from './modules/intelligence/intelligence.routes';
 import { realtimeRouter } from './modules/realtime/realtime.routes';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes';
 import { platformRouter } from './modules/platform/platform.routes';
+import { billingWebhookRouter, paymentRouter } from './modules/billing/payment.routes';
 
 export const createApp = () => {
   const app = express();
@@ -39,6 +40,8 @@ export const createApp = () => {
   app.use('/api/v1/organizations', organizationRouter);
   app.use('/api/v1/plans', plansRouter);
   app.use('/api/v1/subscription', subscriptionRouter);
+  app.use('/api/v1/billing', paymentRouter);
+  app.use('/api/v1/webhooks', billingWebhookRouter);
   app.use('/api/v1/cameras', cameraRouter);
   app.use('/api/v1/gateways', gatewayRouter);
   app.use('/api/v1/gateway-agent/stream-media', streamMediaRouter);

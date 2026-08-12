@@ -291,6 +291,44 @@ export class PlatformService {
     return { items, pagination: pagination(query.page, query.limit, total) };
   }
 
+  async payments(query: Page) {
+    return this.paged(
+      this.prisma.payment,
+      query,
+      {},
+      {
+        id: true,
+        status: true,
+        amountCents: true,
+        currency: true,
+        paymentMethod: true,
+        paidAt: true,
+        createdAt: true,
+        organization: { select: { id: true, name: true } },
+      },
+    );
+  }
+
+  async invoices(query: Page) {
+    return this.paged(
+      this.prisma.invoice,
+      query,
+      {},
+      {
+        id: true,
+        status: true,
+        amountCents: true,
+        currency: true,
+        periodStart: true,
+        periodEnd: true,
+        dueAt: true,
+        paidAt: true,
+        createdAt: true,
+        organization: { select: { id: true, name: true } },
+      },
+    );
+  }
+
   async cameras(query: Page) {
     return this.paged(
       this.prisma.camera,

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
+import { env } from '../../config/env';
 import { prisma } from '../../lib/prisma';
 import { authenticate } from '../auth/auth.middleware';
 import { realtimeService } from '../realtime/realtime.service';
@@ -71,6 +72,20 @@ platformRouter.get('/plans', async (req, res, next) => {
 platformRouter.get('/subscriptions', async (req, res, next) => {
   try {
     res.json(await service.subscriptions(pageSchema.parse(req.query)));
+  } catch (error) {
+    next(error);
+  }
+});
+platformRouter.get('/payments', async (req, res, next) => {
+  try {
+    res.json(await service.payments(pageSchema.parse(req.query)));
+  } catch (error) {
+    next(error);
+  }
+});
+platformRouter.get('/invoices', async (req, res, next) => {
+  try {
+    res.json(await service.invoices(pageSchema.parse(req.query)));
   } catch (error) {
     next(error);
   }
@@ -148,6 +163,12 @@ platformRouter.get('/health', async (_req, res) => {
       retention: 'scheduled',
       notifications: 'scheduled',
       gatewayReconciliation: 'scheduled',
+      billingReconciliation: 'scheduled',
+    },
+    billing: {
+      provider: 'mercado_pago',
+      environment: env.BILLING_ENVIRONMENT,
+      status: env.BILLING_ENABLED && env.MERCADO_PAGO_ACCESS_TOKEN ? 'available' : 'disabled',
     },
     durationMs: Date.now() - startedAt,
   });

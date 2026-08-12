@@ -4,6 +4,8 @@ O contexto `/platform` usa a mesma autenticação segura do cliente, mas uma aut
 
 O Master é somente leitura nesta etapa. Ele expõe organizações, usuários, planos, assinaturas, entitlements configurados, status de câmeras/gateways, accounting de storage, metadados de eventos/alertas, saúde de entregas, auditoria e system health. Não oferece alteração de plano/status, ACK global, exclusão, impersonation ou comandos de gateway.
 
+Após o Prompt 16, o Master também possui visões somente leitura de pagamentos e faturas, sem dados completos de cartão, payloads de provider ou ações de refund.
+
 ## Bootstrap
 
 O primeiro administrador deve ser um usuário já existente. Execute uma única vez em ambiente administrativo:

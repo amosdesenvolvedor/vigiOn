@@ -7,6 +7,7 @@ import { mediaService } from './modules/media/media.routes';
 import { eventService } from './modules/events/event.routes';
 import { notificationService } from './modules/notifications/notification.routes';
 import { realtimeService } from './modules/realtime/realtime.service';
+import { billingPaymentService } from './modules/billing/payment.routes';
 
 const server = createServer(createApp());
 const streamService = new StreamSessionService(prisma);
@@ -41,6 +42,12 @@ const notificationWorker = setInterval(() => {
 notificationWorker.unref();
 const realtimeHeartbeat = setInterval(() => realtimeService.heartbeat(), 20_000);
 realtimeHeartbeat.unref();
+const billingReconcileWorker = setInterval(() => {
+  void billingPaymentService
+    .reconcileExpiredCheckouts()
+    .catch(() => console.error(JSON.stringify({ event: 'billing.reconcile_failed' })));
+}, env.BILLING_RECONCILE_INTERVAL_SECONDS * 1000);
+billingReconcileWorker.unref();
 
 server.listen(env.API_PORT, env.API_HOST, () => {
   console.log(`VigiOn API listening on http://${env.API_HOST}:${env.API_PORT}`);
@@ -52,6 +59,7 @@ const shutdown = async (signal: string) => {
   clearInterval(gatewayReconcileWorker);
   clearInterval(notificationWorker);
   clearInterval(realtimeHeartbeat);
+  clearInterval(billingReconcileWorker);
   console.log(`${signal} received; shutting down`);
   server.close(async () => {
     await prisma.$disconnect();

@@ -210,6 +210,49 @@ enum SubscriptionStatus {
   SUSPENDED
 }
 
+enum BillingProvider {
+  MERCADO_PAGO
+}
+
+enum BillingCheckoutStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+  FAILED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  PAID
+  FAILED
+  CANCELED
+  REFUNDED
+  EXPIRED
+}
+
+enum PaymentMethod {
+  PIX
+  CARD
+  BOLETO
+  UNKNOWN
+}
+
+enum InvoiceStatus {
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+  CANCELED
+}
+
+enum BillingWebhookStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
 enum OneTimeTokenType {
   PASSWORD_RESET
   EMAIL_VERIFICATION
@@ -295,6 +338,9 @@ model Organization {
   cameraZones             CameraZone[]
   eventClassifications    EventClassification[]
   pushSubscriptions       PushSubscription[]
+  billingCheckoutSessions BillingCheckoutSession[]
+  payments                Payment[]
+  invoices                Invoice[]
 
   @@index([status, deletedAt])
 }
@@ -872,26 +918,27 @@ model StorageFile {
 }
 
 model Plan {
-  id                  String                @id @default(uuid()) @db.Char(36)
-  name                String                @db.VarChar(100)
-  slug                String                @unique @db.VarChar(64)
-  code                String                @db.VarChar(32)
-  version             Int                   @default(1)
+  id                  String                   @id @default(uuid()) @db.Char(36)
+  name                String                   @db.VarChar(100)
+  slug                String                   @unique @db.VarChar(64)
+  code                String                   @db.VarChar(32)
+  version             Int                      @default(1)
   priceCents          Int?
-  currency            String                @default("BRL") @db.Char(3)
-  billingInterval     PlanInterval          @default(MONTHLY)
+  currency            String                   @default("BRL") @db.Char(3)
+  billingInterval     PlanInterval             @default(MONTHLY)
   maxCameras          Int
   maxStorageBytes     BigInt
   retentionDays       Int
   maxUsers            Int
-  trialDays           Int                   @default(0)
-  isPublic            Boolean               @default(true)
+  trialDays           Int                      @default(0)
+  isPublic            Boolean                  @default(true)
   enabledFeatures     Json
-  status              PlanStatus            @default(ACTIVE)
-  createdAt           DateTime              @default(now()) @db.DateTime(3)
-  updatedAt           DateTime              @updatedAt @db.DateTime(3)
+  status              PlanStatus               @default(ACTIVE)
+  createdAt           DateTime                 @default(now()) @db.DateTime(3)
+  updatedAt           DateTime                 @updatedAt @db.DateTime(3)
   subscriptions       Subscription[]
   subscriptionHistory SubscriptionHistory[]
+  checkoutSessions    BillingCheckoutSession[]
 
   @@unique([code, version])
   @@index([status])
@@ -899,26 +946,125 @@ model Plan {
 }
 
 model Subscription {
-  id                 String                @id @default(uuid()) @db.Char(36)
-  organizationId     String                @db.Char(36)
-  planId             String                @db.Char(36)
-  status             SubscriptionStatus    @default(TRIALING)
-  startedAt          DateTime              @default(now()) @db.DateTime(3)
-  currentPeriodStart DateTime              @db.DateTime(3)
-  currentPeriodEnd   DateTime              @db.DateTime(3)
-  canceledAt         DateTime?             @db.DateTime(3)
-  cancelAtPeriodEnd  Boolean               @default(false)
-  trialEndsAt        DateTime?             @db.DateTime(3)
-  endedAt            DateTime?             @db.DateTime(3)
-  createdAt          DateTime              @default(now()) @db.DateTime(3)
-  updatedAt          DateTime              @updatedAt @db.DateTime(3)
-  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  plan               Plan                  @relation(fields: [planId], references: [id], onDelete: Restrict)
-  history            SubscriptionHistory[]
+  id                     String                   @id @default(uuid()) @db.Char(36)
+  organizationId         String                   @db.Char(36)
+  planId                 String                   @db.Char(36)
+  status                 SubscriptionStatus       @default(TRIALING)
+  startedAt              DateTime                 @default(now()) @db.DateTime(3)
+  currentPeriodStart     DateTime                 @db.DateTime(3)
+  currentPeriodEnd       DateTime                 @db.DateTime(3)
+  canceledAt             DateTime?                @db.DateTime(3)
+  cancelAtPeriodEnd      Boolean                  @default(false)
+  trialEndsAt            DateTime?                @db.DateTime(3)
+  endedAt                DateTime?                @db.DateTime(3)
+  billingProvider        BillingProvider?
+  providerSubscriptionId String?                  @unique @db.VarChar(191)
+  createdAt              DateTime                 @default(now()) @db.DateTime(3)
+  updatedAt              DateTime                 @updatedAt @db.DateTime(3)
+  organization           Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan                   Plan                     @relation(fields: [planId], references: [id], onDelete: Restrict)
+  history                SubscriptionHistory[]
+  checkoutSessions       BillingCheckoutSession[]
+  payments               Payment[]
+  invoices               Invoice[]
 
   @@index([organizationId, status])
   @@index([organizationId, currentPeriodEnd])
   @@index([planId, status])
+}
+
+model BillingCheckoutSession {
+  id                 String                @id @default(uuid()) @db.Char(36)
+  organizationId     String                @db.Char(36)
+  subscriptionId     String?               @db.Char(36)
+  planId             String                @db.Char(36)
+  requestedById      String                @db.Char(36)
+  provider           BillingProvider       @default(MERCADO_PAGO)
+  providerCheckoutId String?               @unique @db.VarChar(191)
+  idempotencyKey     String                @db.Char(36)
+  status             BillingCheckoutStatus @default(PENDING)
+  amountCents        Int
+  currency           String                @db.Char(3)
+  checkoutUrl        String?               @db.VarChar(2048)
+  expiresAt          DateTime              @db.DateTime(3)
+  completedAt        DateTime?             @db.DateTime(3)
+  errorCode          String?               @db.VarChar(64)
+  createdAt          DateTime              @default(now()) @db.DateTime(3)
+  updatedAt          DateTime              @updatedAt @db.DateTime(3)
+  organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription       Subscription?         @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  plan               Plan                  @relation(fields: [planId], references: [id], onDelete: Restrict)
+  payments           Payment[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, createdAt])
+  @@index([status, expiresAt])
+}
+
+model Payment {
+  id                String                  @id @default(uuid()) @db.Char(36)
+  organizationId    String                  @db.Char(36)
+  subscriptionId    String?                 @db.Char(36)
+  invoiceId         String?                 @db.Char(36)
+  checkoutSessionId String?                 @db.Char(36)
+  provider          BillingProvider         @default(MERCADO_PAGO)
+  providerPaymentId String                  @unique @db.VarChar(191)
+  status            PaymentStatus           @default(PENDING)
+  amountCents       Int
+  currency          String                  @db.Char(3)
+  paymentMethod     PaymentMethod           @default(UNKNOWN)
+  description       String?                 @db.VarChar(255)
+  paidAt            DateTime?               @db.DateTime(3)
+  failedAt          DateTime?               @db.DateTime(3)
+  createdAt         DateTime                @default(now()) @db.DateTime(3)
+  updatedAt         DateTime                @updatedAt @db.DateTime(3)
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription      Subscription?           @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  invoice           Invoice?                @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  checkoutSession   BillingCheckoutSession? @relation(fields: [checkoutSessionId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([subscriptionId, createdAt])
+  @@index([status, createdAt])
+}
+
+model Invoice {
+  id                String          @id @default(uuid()) @db.Char(36)
+  organizationId    String          @db.Char(36)
+  subscriptionId    String?         @db.Char(36)
+  provider          BillingProvider @default(MERCADO_PAGO)
+  providerInvoiceId String?         @unique @db.VarChar(191)
+  status            InvoiceStatus   @default(OPEN)
+  amountCents       Int
+  currency          String          @db.Char(3)
+  periodStart       DateTime        @db.DateTime(3)
+  periodEnd         DateTime        @db.DateTime(3)
+  dueAt             DateTime?       @db.DateTime(3)
+  paidAt            DateTime?       @db.DateTime(3)
+  createdAt         DateTime        @default(now()) @db.DateTime(3)
+  updatedAt         DateTime        @updatedAt @db.DateTime(3)
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  subscription      Subscription?   @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  payments          Payment[]
+
+  @@index([organizationId, createdAt])
+  @@index([subscriptionId, createdAt])
+  @@index([status, createdAt])
+}
+
+model BillingWebhookEvent {
+  id              String               @id @default(uuid()) @db.Char(36)
+  provider        BillingProvider
+  providerEventId String               @db.VarChar(191)
+  type            String               @db.VarChar(100)
+  resourceId      String?              @db.VarChar(191)
+  status          BillingWebhookStatus @default(RECEIVED)
+  receivedAt      DateTime             @default(now()) @db.DateTime(3)
+  processedAt     DateTime?            @db.DateTime(3)
+  errorCode       String?              @db.VarChar(64)
+
+  @@unique([provider, providerEventId])
+  @@index([status, receivedAt])
 }
 
 model SubscriptionHistory {
