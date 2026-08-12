@@ -11,6 +11,7 @@ import type { TenantContext } from '../tenancy/tenant-context';
 import type { RequestMetadata } from '../auth/auth.types';
 import { AlertPolicyService } from './alert-policy.service';
 import { emailProvider, escapeHtml, type EmailProvider } from './email.provider';
+import { realtimeService } from '../realtime/realtime.service';
 
 const types: CameraEventType[] = [
   'MOTION',
@@ -286,6 +287,8 @@ export class AlertService {
             count: resolved.count,
           }),
         );
+      if (resolved.count)
+        realtimeService.publish(event.organizationId, 'ALERT_CHANGED', event.id, event.occurredAt);
       return null;
     }
     if (!this.policy.shouldCreateAlert(event.type)) return null;
@@ -398,6 +401,13 @@ export class AlertService {
         alertId: alert.id,
       }),
     );
+    realtimeService.publish(event.organizationId, 'ALERT_CHANGED', alert.id, event.occurredAt);
+    realtimeService.publish(
+      event.organizationId,
+      'NOTIFICATION_CREATED',
+      alert.id,
+      event.occurredAt,
+    );
     return alert;
   }
   async list(
@@ -469,6 +479,7 @@ export class AlertService {
         alertId: id,
       }),
     );
+    realtimeService.publish(context.organizationId, 'ALERT_CHANGED', id);
     return result;
   }
 }

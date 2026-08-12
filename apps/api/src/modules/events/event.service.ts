@@ -6,6 +6,7 @@ import { MediaAssetService } from '../media/media-asset.service';
 import { S3ObjectStorageService } from '../media/object-storage.service';
 import { AlertService } from '../notifications/notification.service';
 import { IntelligenceService } from '../intelligence/intelligence.service';
+import { realtimeService } from '../realtime/realtime.service';
 
 type GatewayAuth = NonNullable<Express.Request['gatewayAuth']>;
 type GatewayEventInput = {
@@ -197,6 +198,19 @@ export class EventService {
             JSON.stringify({ event: 'alert.processing_failed', eventId: result.event!.id }),
           ),
         );
+      realtimeService.publish(
+        auth.organizationId,
+        'EVENT_CREATED',
+        result.event.id,
+        result.event.occurredAt,
+      );
+      if (input.type === 'CAMERA_ONLINE' || input.type === 'CAMERA_OFFLINE')
+        realtimeService.publish(
+          auth.organizationId,
+          'DEVICE_STATUS_CHANGED',
+          input.cameraId,
+          result.event.occurredAt,
+        );
     }
     return result;
   }
@@ -285,6 +299,12 @@ export class EventService {
       .catch(() =>
         console.error(JSON.stringify({ event: 'alert.processing_failed', eventId: event.id })),
       );
+    realtimeService.publish(
+      auth.organizationId,
+      'DEVICE_STATUS_CHANGED',
+      auth.gatewayId,
+      event.occurredAt,
+    );
     console.info(
       JSON.stringify({
         event: 'gateway.online',
@@ -333,6 +353,8 @@ export class EventService {
           .catch(() =>
             console.error(JSON.stringify({ event: 'alert.processing_failed', eventId })),
           );
+      if (eventId)
+        realtimeService.publish(gateway.organizationId, 'DEVICE_STATUS_CHANGED', gateway.id);
       console.info(
         JSON.stringify({
           event: 'gateway.offline',

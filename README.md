@@ -135,6 +135,10 @@ Eventos acionáveis alimentam uma policy central, alertas com ciclo OPEN/ACKNOWL
 
 Eventos de movimento podem ser classificados por horário IANA, zonas de alta prioridade e persistência. O score determinístico representa prioridade operacional e mantém fatores explicáveis; não é probabilidade de crime. Consulte [docs/event-intelligence.md](docs/event-intelligence.md).
 
+## Central de monitoramento
+
+O dashboard agrega status, câmeras, gateways, eventos, risco, alertas e notificações por organização. Atualizações usam SSE autenticado por ticket curto e polling como fallback; live HLS permanece sob demanda. Consulte [docs/realtime-dashboard.md](docs/realtime-dashboard.md).
+
 Em homologação/produção, o Compose inclui Caddy como proxy reverso, encaminha `/api/*` para a API e entrega o frontend no domínio com HTTPS automático. As portas internas `3000`, `5173` e `3306` ficam vinculadas apenas ao loopback da VM.
 
 ## Roadmap (18 etapas)

@@ -7,6 +7,7 @@ import { GatewayPanel } from './gateways/GatewayPanel';
 import { EventPanel } from './events/EventPanel';
 import { NotificationCenter } from './notifications/NotificationCenter';
 import { IntelligencePanel } from './intelligence/IntelligencePanel';
+import { MonitoringDashboard } from './dashboard/MonitoringDashboard';
 
 function ProtectedArea() {
   const { user, organization, loading, logout } = useAuth();
@@ -43,6 +44,7 @@ function ProtectedArea() {
           </p>
         </section>
         <OrganizationPanel />
+        <MonitoringDashboard />
         <CameraPanel />
         <EventPanel />
         <IntelligencePanel />
