@@ -22,6 +22,7 @@ import {
 import { intelligenceRouter } from './modules/intelligence/intelligence.routes';
 import { realtimeRouter } from './modules/realtime/realtime.routes';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes';
+import { platformRouter } from './modules/platform/platform.routes';
 
 export const createApp = () => {
   const app = express();
@@ -52,6 +53,7 @@ export const createApp = () => {
   app.use('/api/v1/intelligence', intelligenceRouter);
   app.use('/api/v1/realtime', realtimeRouter);
   app.use('/api/v1/dashboard', dashboardRouter);
+  app.use('/api/v1/platform', platformRouter);
   app.use('/api/v1', streamRouter);
   app.use('/api/v1', mediaRouter);
   app.use(notFoundHandler);

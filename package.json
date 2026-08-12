@@ -20,7 +20,8 @@
     "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
-    "test": "npm run test -w @vigioni/api && npm run test -w @vigioni/gateway"
+    "test": "npm run test -w @vigioni/api && npm run test -w @vigioni/gateway",
+    "platform-admin": "node scripts/platform-admin.mjs"
   },
   "engines": {
     "node": ">=18.18.0",

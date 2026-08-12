@@ -6,6 +6,7 @@ interface User {
   name: string;
   email: string;
   role: 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
+  platformRole: 'PLATFORM_ADMIN' | null;
 }
 interface Organization {
   id: string;

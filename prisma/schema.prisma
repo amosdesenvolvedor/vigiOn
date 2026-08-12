@@ -48,6 +48,10 @@ enum PlatformUserRole {
   AUDITOR
 }
 
+enum PlatformRole {
+  PLATFORM_ADMIN
+}
+
 enum CameraAdministrativeStatus {
   ACTIVE
   DISABLED
@@ -316,6 +320,7 @@ model User {
   normalizedEmail         String                   @unique @db.VarChar(254)
   passwordHash            String                   @db.VarChar(255)
   role                    UserRole                 @default(VIEWER)
+  platformRole            PlatformRole?
   status                  UserStatus               @default(INVITED)
   timezone                String?                  @db.VarChar(64)
   lastLoginAt             DateTime?                @db.DateTime(3)
@@ -335,6 +340,7 @@ model User {
   storageFiles            StorageFile[]
   sentInvitations         OrganizationInvitation[] @relation("InvitationSender")
   pushSubscriptions       PushSubscription[]
+  platformAuditLogs       PlatformAuditLog[]       @relation("PlatformAuditActor")
 
   @@unique([organizationId, id])
   @@index([organizationId, status, deletedAt])
@@ -993,4 +999,22 @@ model AuditLog {
   @@index([organizationId, action, createdAt])
   @@index([organizationId, entityType, entityId])
   @@index([actorUserId, createdAt])
+}
+
+model PlatformAuditLog {
+  id          String   @id @default(uuid()) @db.Char(36)
+  actorUserId String?  @db.Char(36)
+  action      String   @db.VarChar(100)
+  entityType  String   @db.VarChar(100)
+  entityId    String?  @db.VarChar(191)
+  reason      String?  @db.VarChar(500)
+  metadata    Json?
+  ipAddress   String?  @db.VarChar(45)
+  userAgent   String?  @db.VarChar(512)
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+  actorUser   User?    @relation("PlatformAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId, createdAt])
 }

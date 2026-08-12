@@ -9,6 +9,7 @@ import { NotificationCenter } from './notifications/NotificationCenter';
 import { IntelligencePanel } from './intelligence/IntelligencePanel';
 import { MonitoringDashboard } from './dashboard/MonitoringDashboard';
 import { MobileExperience } from './mobile/MobileExperience';
+import { PlatformDashboard } from './platform/PlatformDashboard';
 
 function ProtectedArea() {
   const { user, organization, loading, logout } = useAuth();
@@ -19,6 +20,12 @@ function ProtectedArea() {
       </main>
     );
   if (!user || !organization) return <AuthScreen />;
+  if (window.location.pathname.startsWith('/platform'))
+    return user.platformRole === 'PLATFORM_ADMIN' ? (
+      <PlatformDashboard logout={logout} />
+    ) : (
+      <main className="grid min-h-screen place-items-center bg-slate-950 p-6 text-slate-100"><div className="text-center"><h1 className="text-2xl font-bold">Acesso restrito</h1><p className="mt-2 text-slate-400">Sua conta não possui autorização de plataforma.</p><a href="/monitoring" className="mt-5 inline-block rounded border border-slate-700 px-4 py-3">Voltar ao dashboard</a></div></main>
+    );
   return (
     <main className="min-h-screen bg-slate-950 px-4 pb-24 pt-4 text-slate-100 sm:p-6">
       <div className="mx-auto max-w-5xl">

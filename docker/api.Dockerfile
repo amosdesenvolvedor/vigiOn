@@ -12,6 +12,7 @@ COPY tsconfig.base.json ./
 COPY apps/api apps/api
 COPY packages/shared packages/shared
 COPY prisma prisma
+COPY scripts scripts
 
 FROM test AS build
 RUN npm run prisma:generate && npm run build -w @vigioni/shared && npm run build -w @vigioni/api
@@ -28,6 +29,7 @@ COPY --from=build /app/packages/shared/package.json packages/shared/package.json
 COPY --from=build /app/apps/api/dist apps/api/dist
 COPY --from=build /app/packages/shared/dist packages/shared/dist
 COPY --from=build /app/prisma prisma
+COPY --from=build /app/scripts scripts
 COPY --from=build /app/node_modules node_modules
 USER node
 EXPOSE 3000

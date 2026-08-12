@@ -56,12 +56,14 @@ const publicUser = (user: {
   email: string;
   role: string;
   emailVerifiedAt: Date | null;
+  platformRole?: string | null;
 }) => ({
   id: user.id,
   name: user.name,
   email: user.email,
   role: user.role,
   emailVerifiedAt: user.emailVerifiedAt,
+  platformRole: user.platformRole ?? null,
 });
 
 authRouter.post('/register', sensitiveLimiter, async (request, response, next) => {

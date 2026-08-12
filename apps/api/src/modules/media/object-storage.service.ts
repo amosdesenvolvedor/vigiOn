@@ -52,6 +52,10 @@ export class S3ObjectStorageService implements ObjectStorageService {
       throw error;
     }
   }
+  async health() {
+    if (!env.OBJECT_STORAGE_ACCESS_KEY || !env.OBJECT_STORAGE_SECRET_KEY) return false;
+    return this.client.bucketExists(env.OBJECT_STORAGE_BUCKET);
+  }
   private ensureBucket() {
     if (!env.OBJECT_STORAGE_ACCESS_KEY || !env.OBJECT_STORAGE_SECRET_KEY)
       throw new AuthError(503, 'STORAGE_UNAVAILABLE', 'Object storage is not configured');

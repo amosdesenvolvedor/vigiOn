@@ -14,6 +14,16 @@ export class RealtimeService {
   private tickets = new Map<string, Ticket>();
   private clients = new Map<string, Set<Client>>();
   private sequence = 0;
+  stats() {
+    return {
+      activeConnections: [...this.clients.values()].reduce(
+        (total, clients) => total + clients.size,
+        0,
+      ),
+      pendingTickets: this.tickets.size,
+      mode: 'single-instance' as const,
+    };
+  }
   createTicket(context: TenantContext) {
     this.cleanup();
     const token = randomBytes(32).toString('base64url');
