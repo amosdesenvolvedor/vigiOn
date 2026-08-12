@@ -28,6 +28,7 @@ export function StreamPlayer({
   onClose(): void;
 }) {
   const video = useRef<HTMLVideoElement>(null);
+  const sessionId = useRef<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [token, setToken] = useState('');
   const [playbackUrl, setPlaybackUrl] = useState('');
@@ -48,6 +49,7 @@ export function StreamPlayer({
     )
       .then((result) => {
         if (!canceled) {
+          sessionId.current = result.session.id;
           setSession(result.session);
           setToken(result.playbackToken);
           setPlaybackUrl(result.playbackUrl);
@@ -63,6 +65,16 @@ export function StreamPlayer({
       canceled = true;
     };
   }, [cameraId]);
+
+  useEffect(
+    () => () => {
+      if (sessionId.current)
+        void apiRequest(`/stream-sessions/${sessionId.current}`, { method: 'DELETE' }).catch(
+          () => undefined,
+        );
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!session || ['ACTIVE', 'FAILED', 'ENDED', 'EXPIRED'].includes(session.status)) return;
@@ -135,10 +147,11 @@ export function StreamPlayer({
   }, [session?.status, playbackUrl, token]);
 
   const stop = async () => {
-    if (session)
-      await apiRequest(`/stream-sessions/${session.id}`, { method: 'DELETE' }).catch(
-        () => undefined,
-      );
+    if (sessionId.current) {
+      const id = sessionId.current;
+      sessionId.current = null;
+      await apiRequest(`/stream-sessions/${id}`, { method: 'DELETE' }).catch(() => undefined);
+    }
     setState('ended');
     onClose();
   };

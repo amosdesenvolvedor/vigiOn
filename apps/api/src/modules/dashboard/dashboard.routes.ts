@@ -9,8 +9,17 @@ dashboardRouter.get(
   authenticate,
   requirePermission('events:view'),
   async (req, res, next) => {
+    const startedAt = Date.now();
     try {
       res.json(await service.summary(req.auth!));
+      console.info(
+        JSON.stringify({
+          event: 'dashboard.summary_requested',
+          organizationId: req.auth!.organizationId,
+          userId: req.auth!.userId,
+          durationMs: Date.now() - startedAt,
+        }),
+      );
     } catch (e) {
       next(e);
     }

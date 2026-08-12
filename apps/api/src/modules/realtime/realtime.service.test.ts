@@ -1,17 +1,20 @@
 import { EventEmitter } from 'node:events';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RealtimeService } from './realtime.service';
 class FakeResponse extends EventEmitter {
   chunks: string[] = [];
+  ended = false;
   write(value: string) {
     this.chunks.push(value);
     return true;
   }
   end() {
+    this.ended = true;
     this.emit('close');
     return this;
   }
 }
+afterEach(() => vi.useRealTimers());
 const context = (organizationId: string, userId: string) => ({
   organizationId,
   userId,
@@ -38,5 +41,14 @@ describe('realtime tenant channels', () => {
     const ticket = service.consume(service.createTicket(context('org', 'user')).ticket)!;
     expect([1, 2, 3].every(() => service.connect(ticket, new FakeResponse() as never))).toBe(true);
     expect(service.connect(ticket, new FakeResponse() as never)).toBe(false);
+  });
+  it('expires long-lived connections so authentication is checked again', () => {
+    vi.useFakeTimers();
+    const service = new RealtimeService();
+    const ticket = service.consume(service.createTicket(context('org', 'user')).ticket)!;
+    const response = new FakeResponse();
+    expect(service.connect(ticket, response as never)).toBe(true);
+    vi.advanceTimersByTime(15 * 60_000);
+    expect(response.ended).toBe(true);
   });
 });

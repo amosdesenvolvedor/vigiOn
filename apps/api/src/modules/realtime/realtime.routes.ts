@@ -17,10 +17,12 @@ realtimeRouter.get(
   async (req, res) => {
     const parsed = z.string().min(20).max(100).safeParse(req.query.ticket);
     const ticket = parsed.success ? realtimeService.consume(parsed.data) : null;
-    if (!ticket)
+    if (!ticket) {
+      console.warn(JSON.stringify({ event: 'realtime.auth_failed' }));
       return res.status(401).json({
         error: { code: 'REALTIME_UNAUTHORIZED', message: 'Realtime authentication required' },
       });
+    }
     res.set({
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache, no-transform',
