@@ -16,6 +16,7 @@ afterAll(async () => {
     await prisma.notification.deleteMany({
       where: { organizationId: { in: createdOrganizationIds } },
     });
+    await prisma.alert.deleteMany({ where: { organizationId: { in: createdOrganizationIds } } });
     await prisma.storageFile.deleteMany({
       where: { organizationId: { in: createdOrganizationIds } },
     });
@@ -98,11 +99,22 @@ describe('data foundation and tenant isolation', () => {
         occurredAt: new Date(),
       },
     });
+    const alert = await prisma.alert.create({
+      data: {
+        organizationId: organizationA.id,
+        eventId: event.id,
+        cameraId: camera.id,
+        severity: 'LOW',
+        title: 'Motion',
+        message: 'Motion event received',
+      },
+    });
     const notification = await prisma.notification.create({
       data: {
         organizationId: organizationA.id,
         userId: userA.id,
         eventId: event.id,
+        alertId: alert.id,
         title: 'Motion',
         message: 'Motion event received',
       },
@@ -168,6 +180,7 @@ describe('data foundation and tenant isolation', () => {
           organizationId: organizationB.id,
           userId: userB.id,
           eventId: event.id,
+          alertId: alert.id,
           title: 'Invalid cross-tenant relation',
           message: 'Must fail at the database boundary',
         },

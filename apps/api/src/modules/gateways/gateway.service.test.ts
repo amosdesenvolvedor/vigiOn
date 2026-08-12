@@ -68,6 +68,8 @@ async function paired(label: string) {
 
 beforeAll(() => prisma.$connect());
 afterAll(async () => {
+  await prisma.notification.deleteMany({ where: { organizationId: { in: organizationIds } } });
+  await prisma.alert.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.cameraEvent.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.gatewayMessage.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.gatewayCommand.deleteMany({ where: { organizationId: { in: organizationIds } } });

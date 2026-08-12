@@ -127,6 +127,10 @@ Snapshots JPEG e gravações MP4 limitadas são capturados pelo gateway, enviado
 
 O gateway realiza amostragem leve de frames, agrega movimento contínuo e envia eventos idempotentes para uma timeline multi-tenant. Transições de conectividade de câmeras e gateways também são persistidas sem gerar eventos a cada heartbeat. Consulte [docs/monitoring-events.md](docs/monitoring-events.md).
 
+## Alertas e notificações
+
+Eventos acionáveis alimentam uma policy central, alertas com ciclo OPEN/ACKNOWLEDGED/RESOLVED e notificações in-app. E-mail via Resend é opt-in, assíncrono e restrito a endereços verificados; push permanece fora desta etapa por não existir base PWA. Consulte [docs/notifications-alerts.md](docs/notifications-alerts.md).
+
 Em homologação/produção, o Compose inclui Caddy como proxy reverso, encaminha `/api/*` para a API e entrega o frontend no domínio com HTTPS automático. As portas internas `3000`, `5173` e `3306` ficam vinculadas apenas ao loopback da VM.
 
 ## Roadmap (18 etapas)

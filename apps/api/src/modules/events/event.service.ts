@@ -4,6 +4,7 @@ import { AuthError } from '../auth/auth.errors';
 import type { TenantContext } from '../tenancy/tenant-context';
 import { MediaAssetService } from '../media/media-asset.service';
 import { S3ObjectStorageService } from '../media/object-storage.service';
+import { AlertService } from '../notifications/notification.service';
 
 type GatewayAuth = NonNullable<Express.Request['gatewayAuth']>;
 type GatewayEventInput = {
@@ -29,8 +30,10 @@ const eventInclude = {
 
 export class EventService {
   private readonly media: MediaAssetService;
+  private readonly alerts: AlertService;
   constructor(private readonly prisma: PrismaClient) {
     this.media = new MediaAssetService(prisma, new S3ObjectStorageService());
+    this.alerts = new AlertService(prisma);
   }
 
   private timestamp(value: string) {
@@ -175,6 +178,14 @@ export class EventService {
             }),
           ),
         );
+    if (!result.duplicate && result.event)
+      await this.alerts
+        .processEvent(result.event.id)
+        .catch(() =>
+          console.error(
+            JSON.stringify({ event: 'alert.processing_failed', eventId: result.event!.id }),
+          ),
+        );
     return result;
   }
 
@@ -244,7 +255,7 @@ export class EventService {
 
   async gatewayOnline(auth: GatewayAuth, previousStatus: string) {
     if (previousStatus === 'ONLINE' || previousStatus === 'CONNECTING') return;
-    await this.prisma.cameraEvent.create({
+    const event = await this.prisma.cameraEvent.create({
       data: {
         organizationId: auth.organizationId,
         gatewayId: auth.gatewayId,
@@ -257,6 +268,11 @@ export class EventService {
         resolvedAt: new Date(),
       },
     });
+    await this.alerts
+      .processEvent(event.id)
+      .catch(() =>
+        console.error(JSON.stringify({ event: 'alert.processing_failed', eventId: event.id })),
+      );
     console.info(
       JSON.stringify({
         event: 'gateway.online',
@@ -277,7 +293,7 @@ export class EventService {
       select: { id: true, organizationId: true },
     });
     for (const gateway of gateways) {
-      await this.prisma.$transaction(async (tx) => {
+      const eventId = await this.prisma.$transaction(async (tx) => {
         const changed = await tx.gateway.updateMany({
           where: {
             id: gateway.id,
@@ -286,8 +302,8 @@ export class EventService {
           },
           data: { status: 'OFFLINE' },
         });
-        if (!changed.count) return;
-        await tx.cameraEvent.create({
+        if (!changed.count) return null;
+        const event = await tx.cameraEvent.create({
           data: {
             organizationId: gateway.organizationId,
             gatewayId: gateway.id,
@@ -297,7 +313,14 @@ export class EventService {
             occurredAt: new Date(),
           },
         });
+        return event.id;
       });
+      if (eventId)
+        await this.alerts
+          .processEvent(eventId)
+          .catch(() =>
+            console.error(JSON.stringify({ event: 'alert.processing_failed', eventId })),
+          );
       console.info(
         JSON.stringify({
           event: 'gateway.offline',

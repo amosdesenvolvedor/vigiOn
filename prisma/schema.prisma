@@ -129,6 +129,12 @@ enum NotificationStatus {
   READ
 }
 
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
 enum StorageFileType {
   IMAGE
   SNAPSHOT
@@ -220,34 +226,36 @@ enum StreamSessionStatus {
 }
 
 model Organization {
-  id                  String                   @id @default(uuid()) @db.Char(36)
-  name                String                   @db.VarChar(160)
-  slug                String                   @unique @db.VarChar(100)
-  status              OrganizationStatus       @default(ACTIVE)
-  timezone            String                   @default("UTC") @db.VarChar(64)
-  deletedAt           DateTime?                @db.DateTime(3)
-  createdAt           DateTime                 @default(now()) @db.DateTime(3)
-  updatedAt           DateTime                 @updatedAt @db.DateTime(3)
-  customer            CustomerProfile?
-  users               User[]
-  memberships         OrganizationMembership[]
-  invitations         OrganizationInvitation[]
-  settings            OrganizationSettings?
-  cameras             Camera[]
-  gateways            Gateway[]
-  gatewayPairingCodes GatewayPairingCode[]
-  gatewayCommands     GatewayCommand[]
-  gatewayMessages     GatewayMessage[]
-  streamSessions      StreamSession[]
-  events              CameraEvent[]
-  notifications       Notification[]
-  storageFiles        StorageFile[]
-  subscriptions       Subscription[]
-  subscriptionHistory SubscriptionHistory[]
-  storageUsage        StorageUsage?
-  resourceCounter     ResourceCounter?
-  limitEvents         LimitEvent[]
-  auditLogs           AuditLog[]
+  id                      String                   @id @default(uuid()) @db.Char(36)
+  name                    String                   @db.VarChar(160)
+  slug                    String                   @unique @db.VarChar(100)
+  status                  OrganizationStatus       @default(ACTIVE)
+  timezone                String                   @default("UTC") @db.VarChar(64)
+  deletedAt               DateTime?                @db.DateTime(3)
+  createdAt               DateTime                 @default(now()) @db.DateTime(3)
+  updatedAt               DateTime                 @updatedAt @db.DateTime(3)
+  customer                CustomerProfile?
+  users                   User[]
+  memberships             OrganizationMembership[]
+  invitations             OrganizationInvitation[]
+  settings                OrganizationSettings?
+  cameras                 Camera[]
+  gateways                Gateway[]
+  gatewayPairingCodes     GatewayPairingCode[]
+  gatewayCommands         GatewayCommand[]
+  gatewayMessages         GatewayMessage[]
+  streamSessions          StreamSession[]
+  events                  CameraEvent[]
+  notifications           Notification[]
+  alerts                  Alert[]
+  notificationPreferences NotificationPreference[]
+  storageFiles            StorageFile[]
+  subscriptions           Subscription[]
+  subscriptionHistory     SubscriptionHistory[]
+  storageUsage            StorageUsage?
+  resourceCounter         ResourceCounter?
+  limitEvents             LimitEvent[]
+  auditLogs               AuditLog[]
 
   @@index([status, deletedAt])
 }
@@ -266,29 +274,31 @@ model CustomerProfile {
 }
 
 model User {
-  id              String                   @id @default(uuid()) @db.Char(36)
-  organizationId  String                   @db.Char(36)
-  name            String                   @db.VarChar(160)
-  email           String                   @db.VarChar(254)
-  normalizedEmail String                   @unique @db.VarChar(254)
-  passwordHash    String                   @db.VarChar(255)
-  role            UserRole                 @default(VIEWER)
-  status          UserStatus               @default(INVITED)
-  timezone        String?                  @db.VarChar(64)
-  lastLoginAt     DateTime?                @db.DateTime(3)
-  emailVerifiedAt DateTime?                @db.DateTime(3)
-  deletedAt       DateTime?                @db.DateTime(3)
-  createdAt       DateTime                 @default(now()) @db.DateTime(3)
-  updatedAt       DateTime                 @updatedAt @db.DateTime(3)
-  organization    Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  notifications   Notification[]
-  auditLogs       AuditLog[]
-  sessions        Session[]
-  oneTimeTokens   OneTimeToken[]
-  memberships     OrganizationMembership[]
-  streamSessions  StreamSession[]
-  storageFiles    StorageFile[]
-  sentInvitations OrganizationInvitation[] @relation("InvitationSender")
+  id                      String                   @id @default(uuid()) @db.Char(36)
+  organizationId          String                   @db.Char(36)
+  name                    String                   @db.VarChar(160)
+  email                   String                   @db.VarChar(254)
+  normalizedEmail         String                   @unique @db.VarChar(254)
+  passwordHash            String                   @db.VarChar(255)
+  role                    UserRole                 @default(VIEWER)
+  status                  UserStatus               @default(INVITED)
+  timezone                String?                  @db.VarChar(64)
+  lastLoginAt             DateTime?                @db.DateTime(3)
+  emailVerifiedAt         DateTime?                @db.DateTime(3)
+  deletedAt               DateTime?                @db.DateTime(3)
+  createdAt               DateTime                 @default(now()) @db.DateTime(3)
+  updatedAt               DateTime                 @updatedAt @db.DateTime(3)
+  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  notifications           Notification[]
+  acknowledgedAlerts      Alert[]                  @relation("AlertAcknowledgedBy")
+  notificationPreferences NotificationPreference[]
+  auditLogs               AuditLog[]
+  sessions                Session[]
+  oneTimeTokens           OneTimeToken[]
+  memberships             OrganizationMembership[]
+  streamSessions          StreamSession[]
+  storageFiles            StorageFile[]
+  sentInvitations         OrganizationInvitation[] @relation("InvitationSender")
 
   @@unique([organizationId, id])
   @@index([organizationId, status, deletedAt])
@@ -587,6 +597,7 @@ model CameraEvent {
   camera          Camera?           @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Restrict)
   gateway         Gateway?          @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
   notifications   Notification[]
+  alert           Alert?
   storageFiles    StorageFile[]
 
   @@unique([organizationId, id])
@@ -598,11 +609,57 @@ model CameraEvent {
   @@index([organizationId, type, occurredAt])
 }
 
+model Alert {
+  id               String         @id @default(uuid()) @db.Char(36)
+  organizationId   String         @db.Char(36)
+  eventId          String         @unique @db.Char(36)
+  cameraId         String?        @db.Char(36)
+  gatewayId        String?        @db.Char(36)
+  severity         EventSeverity
+  status           AlertStatus    @default(OPEN)
+  title            String         @db.VarChar(180)
+  message          String         @db.VarChar(500)
+  acknowledgedAt   DateTime?      @db.DateTime(3)
+  acknowledgedById String?        @db.Char(36)
+  resolvedAt       DateTime?      @db.DateTime(3)
+  createdAt        DateTime       @default(now()) @db.DateTime(3)
+  updatedAt        DateTime       @updatedAt @db.DateTime(3)
+  organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  event            CameraEvent    @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Restrict)
+  acknowledgedBy   User?          @relation("AlertAcknowledgedBy", fields: [organizationId, acknowledgedById], references: [organizationId, id], onDelete: Restrict)
+  notifications    Notification[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, eventId])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, severity, createdAt])
+  @@index([organizationId, cameraId, createdAt])
+  @@index([organizationId, gatewayId, createdAt])
+}
+
+model NotificationPreference {
+  id              String              @id @default(uuid()) @db.Char(36)
+  organizationId  String              @db.Char(36)
+  userId          String              @db.Char(36)
+  eventType       CameraEventType
+  channel         NotificationChannel
+  enabled         Boolean             @default(true)
+  minimumSeverity EventSeverity       @default(INFO)
+  createdAt       DateTime            @default(now()) @db.DateTime(3)
+  updatedAt       DateTime            @updatedAt @db.DateTime(3)
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user            User                @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, eventType, channel], map: "NotificationPreference_user_event_channel_key")
+  @@index([organizationId, userId])
+}
+
 model Notification {
   id             String               @id @default(uuid()) @db.Char(36)
   organizationId String               @db.Char(36)
   userId         String               @db.Char(36)
   eventId        String?              @db.Char(36)
+  alertId        String               @db.Char(36)
   channel        NotificationChannel  @default(IN_APP)
   title          String               @db.VarChar(180)
   message        String               @db.Text
@@ -610,14 +667,23 @@ model Notification {
   status         NotificationStatus   @default(PENDING)
   readAt         DateTime?            @db.DateTime(3)
   sentAt         DateTime?            @db.DateTime(3)
+  deliveredAt    DateTime?            @db.DateTime(3)
+  attempts       Int                  @default(0)
+  nextAttemptAt  DateTime?            @db.DateTime(3)
+  expiresAt      DateTime?            @db.DateTime(3)
+  errorCode      String?              @db.VarChar(64)
   createdAt      DateTime             @default(now()) @db.DateTime(3)
   organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   user           User                 @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Restrict)
   event          CameraEvent?         @relation(fields: [organizationId, eventId], references: [organizationId, id], onDelete: Restrict)
+  alert          Alert                @relation(fields: [organizationId, alertId], references: [organizationId, id], onDelete: Restrict)
 
+  @@unique([alertId, userId, channel])
   @@index([organizationId, userId, status, createdAt])
+  @@index([organizationId, userId, readAt, createdAt])
   @@index([organizationId, status, createdAt])
   @@index([organizationId, eventId])
+  @@index([status, nextAttemptAt])
 }
 
 model StorageFile {

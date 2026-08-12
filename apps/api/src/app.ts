@@ -13,6 +13,11 @@ import { gatewayAgentRouter, gatewayRouter } from './modules/gateways/gateway.ro
 import { streamMediaRouter, streamRouter } from './modules/streams/stream.routes';
 import { mediaRouter, mediaUploadRouter } from './modules/media/media.routes';
 import { eventRouter, gatewayEventRouter } from './modules/events/event.routes';
+import {
+  alertRouter,
+  notificationRouter,
+  preferenceRouter,
+} from './modules/notifications/notification.routes';
 
 export const createApp = () => {
   const app = express();
@@ -36,6 +41,9 @@ export const createApp = () => {
   app.use('/api/v1/gateway-agent/events', gatewayEventRouter);
   app.use('/api/v1/gateway-agent', gatewayAgentRouter);
   app.use('/api/v1/events', eventRouter);
+  app.use('/api/v1/alerts', alertRouter);
+  app.use('/api/v1/notifications', notificationRouter);
+  app.use('/api/v1/notification-preferences', preferenceRouter);
   app.use('/api/v1', streamRouter);
   app.use('/api/v1', mediaRouter);
   app.use(notFoundHandler);

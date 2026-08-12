@@ -40,6 +40,10 @@ const envSchema = z.object({
   EVENT_TIMESTAMP_SKEW_SECONDS: z.coerce.number().int().min(60).max(86400).default(3600),
   EVENT_METADATA_MAX_BYTES: z.coerce.number().int().min(256).max(16384).default(4096),
   GATEWAY_RECONCILE_INTERVAL_SECONDS: z.coerce.number().int().min(15).max(300).default(30),
+  NOTIFICATION_WORKER_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(300).default(30),
+  NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+  NOTIFICATION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+  EMAIL_COOLDOWN_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
 });
 
 const parsed = envSchema.safeParse(process.env);
