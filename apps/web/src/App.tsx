@@ -8,6 +8,7 @@ import { EventPanel } from './events/EventPanel';
 import { NotificationCenter } from './notifications/NotificationCenter';
 import { IntelligencePanel } from './intelligence/IntelligencePanel';
 import { MonitoringDashboard } from './dashboard/MonitoringDashboard';
+import { MobileExperience } from './mobile/MobileExperience';
 
 function ProtectedArea() {
   const { user, organization, loading, logout } = useAuth();
@@ -19,7 +20,7 @@ function ProtectedArea() {
     );
   if (!user || !organization) return <AuthScreen />;
   return (
-    <main className="min-h-screen bg-slate-950 p-6 text-slate-100">
+    <main className="min-h-screen bg-slate-950 px-4 pb-24 pt-4 text-slate-100 sm:p-6">
       <div className="mx-auto max-w-5xl">
         <header className="flex items-center justify-between border-b border-slate-800 pb-6">
           <div>
@@ -33,25 +34,59 @@ function ProtectedArea() {
             Sair
           </button>
         </header>
-        <section className="pt-12">
+        <MobileExperience />
+        <section className="pt-8 sm:pt-12">
           <p className="text-sm font-semibold uppercase tracking-[.2em] text-emerald-400">
             Sessão protegida
           </p>
           <h1 className="mt-4 text-4xl font-bold">Olá, {user.name}.</h1>
           <p className="mt-4 text-slate-400">
-            Sua autenticação está ativa com a função {user.role}. O dashboard será construído em uma
-            etapa futura.
+            Sua sessão está ativa com a função {user.role}. A central acompanha sua organização em
+            tempo quase real.
           </p>
         </section>
-        <OrganizationPanel />
-        <MonitoringDashboard />
-        <CameraPanel />
-        <EventPanel />
+        <div id="more">
+          <OrganizationPanel />
+        </div>
+        <div id="monitoring">
+          <MonitoringDashboard />
+        </div>
+        <div id="cameras">
+          <CameraPanel />
+        </div>
+        <div id="events">
+          <EventPanel />
+        </div>
         <IntelligencePanel />
-        <NotificationCenter />
+        <div id="alerts">
+          <NotificationCenter />
+        </div>
         <GatewayPanel />
         <BillingPanel />
       </div>
+      <nav
+        aria-label="Navegação principal"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-700 bg-slate-950/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      >
+        {[
+          ['monitoring', 'Central', '◉'],
+          ['cameras', 'Câmeras', '▣'],
+          ['alerts', 'Alertas', '△'],
+          ['events', 'Eventos', '≡'],
+          ['more', 'Mais', '•••'],
+        ].map(([target, label, icon]) => (
+          <a
+            key={target}
+            href={`#${target}`}
+            className="flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs text-slate-300 focus:bg-slate-800 focus:outline-none"
+          >
+            <span aria-hidden="true" className="text-lg">
+              {icon}
+            </span>
+            <span>{label}</span>
+          </a>
+        ))}
+      </nav>
     </main>
   );
 }

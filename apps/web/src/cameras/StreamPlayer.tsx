@@ -77,6 +77,29 @@ export function StreamPlayer({
   );
 
   useEffect(() => {
+    let backgroundTimer: number | undefined;
+    const visibilityChanged = () => {
+      if (document.hidden) {
+        backgroundTimer = window.setTimeout(() => {
+          const id = sessionId.current;
+          sessionId.current = null;
+          if (id)
+            void apiRequest(`/stream-sessions/${id}`, { method: 'DELETE' }).catch(() => undefined);
+          onClose();
+        }, 60_000);
+      } else if (backgroundTimer) {
+        window.clearTimeout(backgroundTimer);
+        backgroundTimer = undefined;
+      }
+    };
+    document.addEventListener('visibilitychange', visibilityChanged);
+    return () => {
+      document.removeEventListener('visibilitychange', visibilityChanged);
+      if (backgroundTimer) window.clearTimeout(backgroundTimer);
+    };
+  }, [onClose]);
+
+  useEffect(() => {
     if (!session || ['ACTIVE', 'FAILED', 'ENDED', 'EXPIRED'].includes(session.status)) return;
     const timer = window.setInterval(() => {
       void apiRequest<{ session: Session }>(`/stream-sessions/${session.id}`)
@@ -183,6 +206,14 @@ export function StreamPlayer({
             </div>
           )}
         </div>
+        {video.current?.requestFullscreen && (
+          <button
+            className="mt-3 min-h-11 rounded border border-slate-700 px-4 text-sm"
+            onClick={() => void video.current?.requestFullscreen()}
+          >
+            Tela cheia
+          </button>
+        )}
         <p className="mt-3 text-sm text-slate-400">{message} · Sessão temporária e revogável</p>
       </div>
     </div>

@@ -5,9 +5,11 @@ import { prisma } from '../../lib/prisma';
 import { AuthError } from '../auth/auth.errors';
 import { authenticate, requirePermission } from '../auth/auth.middleware';
 import { AlertService, NotificationService } from './notification.service';
+import { PushSubscriptionService } from './push-subscription.service';
 
 export const notificationService = new NotificationService(prisma);
 export const alertService = new AlertService(prisma);
+const pushSubscriptions = new PushSubscriptionService(prisma);
 const limited = rateLimit({
   windowMs: 60000,
   max: 60,
@@ -31,7 +33,7 @@ const preferenceSchema = z
       'GATEWAY_OFFLINE',
       'GATEWAY_ONLINE',
     ]),
-    channel: z.enum(['IN_APP', 'EMAIL']),
+    channel: z.enum(['IN_APP', 'EMAIL', 'PUSH']),
     enabled: z.boolean(),
     minimumSeverity: z.enum(['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   })
@@ -45,6 +47,21 @@ const metadata = (request: Request) => ({
   ...(request.ip ? { ipAddress: request.ip } : {}),
   ...(request.get('user-agent') ? { userAgent: request.get('user-agent')!.slice(0, 512) } : {}),
 });
+const pushSubscriptionSchema = z
+  .object({
+    endpoint: z
+      .string()
+      .url()
+      .max(2048)
+      .refine((value) => value.startsWith('https://')),
+    keys: z
+      .object({
+        p256dh: z.string().min(40).max(255),
+        auth: z.string().min(16).max(255),
+      })
+      .strict(),
+  })
+  .strict();
 
 export const notificationRouter = Router();
 notificationRouter.use(authenticate);
@@ -121,6 +138,32 @@ preferenceRouter.put(
     }
   },
 );
+
+export const pushRouter = Router();
+pushRouter.use(authenticate, requirePermission('notifications:view'));
+pushRouter.get('/configuration', (_req, res) => res.json(pushSubscriptions.configuration()));
+pushRouter.post('/subscriptions', limited, async (req, res, next) => {
+  try {
+    res.status(201).json({
+      subscription: await pushSubscriptions.subscribe(
+        req.auth!,
+        pushSubscriptionSchema.parse(req.body),
+        req.get('user-agent')?.slice(0, 512),
+      ),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+pushRouter.delete('/subscriptions', limited, async (req, res, next) => {
+  try {
+    const { endpoint } = z.object({ endpoint: z.string().url().max(2048) }).parse(req.body);
+    await pushSubscriptions.unsubscribe(req.auth!, endpoint);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
 
 export const alertRouter = Router();
 alertRouter.use(authenticate);

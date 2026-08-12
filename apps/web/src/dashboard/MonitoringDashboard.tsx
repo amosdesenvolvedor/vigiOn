@@ -79,7 +79,12 @@ export function MonitoringDashboard() {
   useEffect(() => {
     void load();
     const timer = setInterval(() => void load(), 60_000);
-    return () => clearInterval(timer);
+    const recovered = () => void load();
+    window.addEventListener('vigion:network-recovered', recovered);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('vigion:network-recovered', recovered);
+    };
   }, [load]);
   if (loading)
     return <section className="p-8 text-slate-400">Carregando central de monitoramento…</section>;

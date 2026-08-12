@@ -44,10 +44,19 @@ const envSchema = z.object({
   NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
   NOTIFICATION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
   EMAIL_COOLDOWN_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
+  WEB_PUSH_VAPID_PUBLIC_KEY: optionalSecret(40),
+  WEB_PUSH_VAPID_PRIVATE_KEY: optionalSecret(40),
+  WEB_PUSH_SUBJECT: z.string().default('mailto:security@vigion.cloud'),
 });
 
 const parsed = envSchema.safeParse(process.env);
 
+if (
+  parsed.success &&
+  Boolean(parsed.data.WEB_PUSH_VAPID_PUBLIC_KEY) !== Boolean(parsed.data.WEB_PUSH_VAPID_PRIVATE_KEY)
+) {
+  throw new Error('Both Web Push VAPID keys must be configured together');
+}
 if (!parsed.success) {
   console.error('Invalid environment configuration', parsed.error.flatten().fieldErrors);
   throw new Error('Invalid environment configuration');

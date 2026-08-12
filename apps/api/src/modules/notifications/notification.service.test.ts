@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { EmailMessage, EmailProvider } from './email.provider';
 import { AlertService, NotificationService } from './notification.service';
+import type { PushMessage, PushProvider } from './push.provider';
 
 class MockEmailProvider implements EmailProvider {
   messages: EmailMessage[] = [];
@@ -12,9 +13,19 @@ class MockEmailProvider implements EmailProvider {
     this.messages.push(message);
   }
 }
+class MockPushProvider implements PushProvider {
+  available = true;
+  messages: PushMessage[] = [];
+  fail = false;
+  async send(message: PushMessage) {
+    if (this.fail) throw new Error('MOCK_PUSH_FAILURE');
+    this.messages.push(message);
+  }
+}
 const prisma = new PrismaClient();
 const provider = new MockEmailProvider();
-const notifications = new NotificationService(prisma, provider);
+const push = new MockPushProvider();
+const notifications = new NotificationService(prisma, provider, push);
 const alerts = new AlertService(prisma);
 const suffix = randomUUID().slice(0, 8);
 const organizationIds: string[] = [];
@@ -95,6 +106,7 @@ async function event(
 }
 beforeAll(() => prisma.$connect());
 afterAll(async () => {
+  await prisma.pushSubscription.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.notification.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.notificationPreference.deleteMany({
     where: { organizationId: { in: organizationIds } },
@@ -183,5 +195,35 @@ describe('alerts and notifications', () => {
         (item) => item.id === alert!.id,
       ),
     ).toBe(false);
+  });
+  it('delivers push to active devices and isolates provider failure from in-app', async () => {
+    const current = await tenant('push');
+    await notifications.updatePreference(
+      current.context,
+      { eventType: 'MOTION', channel: 'PUSH', enabled: true, minimumSeverity: 'LOW' },
+      {},
+    );
+    await prisma.pushSubscription.create({
+      data: {
+        organizationId: current.organization.id,
+        userId: current.user.id,
+        endpoint: 'https://push.example.test/notification-device',
+        endpointHash: '1'.repeat(64),
+        p256dh: 'p'.repeat(64),
+        auth: 'a'.repeat(24),
+      },
+    });
+    const motion = await event(current, 'MOTION');
+    await alerts.processEvent(motion.id);
+    await notifications.dispatchBatch();
+    expect(push.messages).toHaveLength(1);
+    expect(
+      await prisma.notification.findFirstOrThrow({
+        where: { eventId: motion.id, channel: 'PUSH' },
+      }),
+    ).toMatchObject({ status: 'SENT' });
+    expect(
+      await prisma.notification.count({ where: { eventId: motion.id, channel: 'IN_APP' } }),
+    ).toBe(1);
   });
 });

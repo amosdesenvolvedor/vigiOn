@@ -290,6 +290,7 @@ model Organization {
   scheduleExceptions      ScheduleException[]
   cameraZones             CameraZone[]
   eventClassifications    EventClassification[]
+  pushSubscriptions       PushSubscription[]
 
   @@index([status, deletedAt])
 }
@@ -333,6 +334,7 @@ model User {
   streamSessions          StreamSession[]
   storageFiles            StorageFile[]
   sentInvitations         OrganizationInvitation[] @relation("InvitationSender")
+  pushSubscriptions       PushSubscription[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, deletedAt])
@@ -769,6 +771,25 @@ model NotificationPreference {
 
   @@unique([organizationId, userId, eventType, channel], map: "NotificationPreference_user_event_channel_key")
   @@index([organizationId, userId])
+}
+
+model PushSubscription {
+  id             String       @id @default(uuid()) @db.Char(36)
+  organizationId String       @db.Char(36)
+  userId         String       @db.Char(36)
+  endpoint       String       @db.Text
+  endpointHash   String       @unique @db.Char(64)
+  p256dh         String       @db.VarChar(255)
+  auth           String       @db.VarChar(255)
+  userAgent      String?      @db.VarChar(512)
+  lastUsedAt     DateTime?    @db.DateTime(3)
+  revokedAt      DateTime?    @db.DateTime(3)
+  createdAt      DateTime     @default(now()) @db.DateTime(3)
+  updatedAt      DateTime     @updatedAt @db.DateTime(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user           User         @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, userId, revokedAt])
 }
 
 model Notification {

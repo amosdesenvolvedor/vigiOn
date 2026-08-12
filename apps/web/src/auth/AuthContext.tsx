@@ -71,8 +71,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
   const logout = async () => {
     try {
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) {
+          await apiRequest('/push/subscriptions', {
+            method: 'DELETE',
+            body: JSON.stringify({ endpoint: subscription.endpoint }),
+          }).catch(() => undefined);
+          await subscription.unsubscribe().catch(() => false);
+        }
+      }
       await apiRequest('/auth/logout', { method: 'POST' });
     } finally {
+      if ('serviceWorker' in navigator)
+        void navigator.serviceWorker.ready.then((registration) =>
+          registration.active?.postMessage({ type: 'CLEAR_PUBLIC_CACHES' }),
+        );
       setAccessToken(null);
       setUser(null);
       setOrganization(null);

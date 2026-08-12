@@ -21,7 +21,7 @@ type Alert = {
 };
 type Preference = {
   eventType: string;
-  channel: 'IN_APP' | 'EMAIL';
+  channel: 'IN_APP' | 'EMAIL' | 'PUSH';
   enabled: boolean;
   minimumSeverity: string;
 };
@@ -67,9 +67,11 @@ export function NotificationCenter() {
     const timer = setInterval(() => void load(), 30000);
     const refresh = () => void load();
     window.addEventListener(realtimeInvalidationEvent, refresh);
+    window.addEventListener('vigion:network-recovered', refresh);
     return () => {
       clearInterval(timer);
       window.removeEventListener(realtimeInvalidationEvent, refresh);
+      window.removeEventListener('vigion:network-recovered', refresh);
     };
   }, [load]);
   const read = async (item: Notification) => {
@@ -163,7 +165,11 @@ export function NotificationCenter() {
             >
               <span>
                 {eventLabels[pref.eventType]} ·{' '}
-                {pref.channel === 'IN_APP' ? 'No aplicativo' : 'E-mail'}
+                {pref.channel === 'IN_APP'
+                  ? 'No aplicativo'
+                  : pref.channel === 'EMAIL'
+                    ? 'E-mail'
+                    : 'Push'}
               </span>
               <input
                 type="checkbox"

@@ -12,6 +12,7 @@ import type { RequestMetadata } from '../auth/auth.types';
 import { AlertPolicyService } from './alert-policy.service';
 import { emailProvider, escapeHtml, type EmailProvider } from './email.provider';
 import { realtimeService } from '../realtime/realtime.service';
+import { pushProvider, type PushProvider } from './push.provider';
 
 const types: CameraEventType[] = [
   'MOTION',
@@ -20,12 +21,13 @@ const types: CameraEventType[] = [
   'GATEWAY_OFFLINE',
   'GATEWAY_ONLINE',
 ];
-const channels: NotificationChannel[] = ['IN_APP', 'EMAIL'];
+const channels: NotificationChannel[] = ['IN_APP', 'EMAIL', 'PUSH'];
 
 export class NotificationService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly provider: EmailProvider = emailProvider,
+    private readonly push: PushProvider = pushProvider,
   ) {}
 
   async list(context: TenantContext, page: number, limit: number) {
@@ -121,7 +123,7 @@ export class NotificationService {
     context: TenantContext,
     input: {
       eventType: CameraEventType;
-      channel: 'IN_APP' | 'EMAIL';
+      channel: 'IN_APP' | 'EMAIL' | 'PUSH';
       enabled: boolean;
       minimumSeverity: EventSeverity;
     },
@@ -174,7 +176,7 @@ export class NotificationService {
     const now = new Date();
     const pending = await this.prisma.notification.findMany({
       where: {
-        channel: 'EMAIL',
+        channel: { in: ['EMAIL', 'PUSH'] },
         status: { in: ['PENDING', 'FAILED'] },
         attempts: { lt: env.NOTIFICATION_MAX_ATTEMPTS },
         expiresAt: { gt: now },
@@ -185,6 +187,10 @@ export class NotificationService {
       include: { user: { select: { email: true, emailVerifiedAt: true } }, alert: true },
     });
     for (const notification of pending) {
+      if (notification.channel === 'PUSH') {
+        await this.dispatchPush(notification);
+        continue;
+      }
       if (!notification.user.emailVerifiedAt) {
         await this.prisma.notification.update({
           where: { id: notification.id },
@@ -251,6 +257,90 @@ export class NotificationService {
       }
     }
     return pending.length;
+  }
+
+  private async dispatchPush(notification: {
+    id: string;
+    organizationId: string;
+    userId: string;
+    alertId: string;
+    title: string;
+    message: string;
+    attempts: number;
+  }) {
+    if (!this.push.available) return;
+    const subscriptions = await this.prisma.pushSubscription.findMany({
+      where: {
+        organizationId: notification.organizationId,
+        userId: notification.userId,
+        revokedAt: null,
+      },
+    });
+    if (!subscriptions.length) {
+      await this.prisma.notification.update({
+        where: { id: notification.id },
+        data: { status: 'FAILED', errorCode: 'NO_ACTIVE_SUBSCRIPTION', nextAttemptAt: null },
+      });
+      return;
+    }
+    let accepted = 0;
+    for (const subscription of subscriptions) {
+      try {
+        await this.push.send({
+          endpoint: subscription.endpoint,
+          p256dh: subscription.p256dh,
+          auth: subscription.auth,
+          title: notification.title,
+          body: notification.message,
+          path: `/alerts?alert=${notification.alertId}`,
+        });
+        accepted += 1;
+        await this.prisma.pushSubscription.update({
+          where: { id: subscription.id },
+          data: { lastUsedAt: new Date() },
+        });
+      } catch (error) {
+        const statusCode =
+          typeof error === 'object' && error && 'statusCode' in error
+            ? Number(error.statusCode)
+            : 0;
+        if (statusCode === 404 || statusCode === 410)
+          await this.prisma.pushSubscription.update({
+            where: { id: subscription.id },
+            data: { revokedAt: new Date() },
+          });
+      }
+    }
+    const attempts = notification.attempts + 1;
+    await this.prisma.notification.update({
+      where: { id: notification.id },
+      data: accepted
+        ? {
+            status: 'SENT',
+            sentAt: new Date(),
+            attempts,
+            nextAttemptAt: null,
+            errorCode: null,
+          }
+        : {
+            status: 'FAILED',
+            attempts,
+            nextAttemptAt:
+              attempts >= env.NOTIFICATION_MAX_ATTEMPTS
+                ? null
+                : new Date(Date.now() + Math.min(3600000, 30000 * 2 ** attempts)),
+            errorCode: 'PUSH_DELIVERY_FAILED',
+          },
+    });
+    console.info(
+      JSON.stringify({
+        event: accepted ? 'push.sent' : 'push.failed',
+        organizationId: notification.organizationId,
+        userId: notification.userId,
+        notificationId: notification.id,
+        acceptedSubscriptions: accepted,
+      }),
+    );
   }
 }
 
@@ -347,7 +437,7 @@ export class AlertService {
             organizationId: event.organizationId,
             userId: recipient.userId,
             eventType: event.type,
-            channel: { in: ['IN_APP', 'EMAIL'] },
+            channel: { in: ['IN_APP', 'EMAIL', 'PUSH'] },
           },
         });
         for (const channel of channels) {
