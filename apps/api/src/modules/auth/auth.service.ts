@@ -5,6 +5,7 @@ import { AuthError, invalidCredentials } from './auth.errors';
 import { hashPassword, verifyPassword } from './password';
 import { createAccessToken, createOpaqueToken, hashOpaqueToken } from './tokens';
 import type { AuthTokens, RequestMetadata, TokenDelivery } from './auth.types';
+import { MfaService } from './mfa.service';
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 const plusDays = (days: number) => new Date(Date.now() + days * 86_400_000);
@@ -20,15 +21,19 @@ const slugify = (name: string) =>
     .slice(0, 70)}-${randomUUID().slice(0, 8)}`;
 
 export class AuthService {
+  private readonly mfa: MfaService;
   constructor(
     private readonly prisma: PrismaClient,
     private readonly delivery: TokenDelivery,
-  ) {}
+  ) {
+    this.mfa = new MfaService(prisma);
+  }
 
   private async issueSession(
     user: User,
     membership: OrganizationMembership,
     metadata: RequestMetadata,
+    mfaVerified = false,
   ): Promise<AuthTokens> {
     const refreshToken = createOpaqueToken();
     const session = await this.prisma.session.create({
@@ -38,6 +43,7 @@ export class AuthService {
         familyId: randomUUID(),
         tokenHash: hashOpaqueToken(refreshToken),
         expiresAt: plusDays(env.REFRESH_TOKEN_TTL_DAYS),
+        mfaVerifiedAt: mfaVerified ? new Date() : null,
         ...metadata,
       },
     });
@@ -179,7 +185,7 @@ export class AuthService {
     };
   }
 
-  async login(email: string, password: string, metadata: RequestMetadata) {
+  async login(email: string, password: string, metadata: RequestMetadata, mfaCode?: string) {
     const user = await this.prisma.user.findUnique({
       where: { normalizedEmail: normalizeEmail(email) },
       include: {
@@ -200,7 +206,12 @@ export class AuthService {
       throw invalidCredentials();
 
     const membership = user.memberships[0];
-    const tokens = await this.issueSession(user, membership, metadata);
+    const mfa = await this.mfa.status(user.id);
+    if (mfa.enrolled) {
+      if (!mfaCode) throw new AuthError(401, 'MFA_REQUIRED', 'Multi-factor authentication required');
+      await this.mfa.verify(user.id, membership.organizationId, mfaCode, metadata);
+    }
+    const tokens = await this.issueSession(user, membership, metadata, mfa.enrolled);
     await this.prisma.$transaction([
       this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
       this.prisma.auditLog.create({
@@ -258,6 +269,7 @@ export class AuthService {
           familyId: current.familyId,
           tokenHash: hashOpaqueToken(nextToken),
           expiresAt: plusDays(env.REFRESH_TOKEN_TTL_DAYS),
+          mfaVerifiedAt: current.mfaVerifiedAt,
           ...metadata,
         },
       });

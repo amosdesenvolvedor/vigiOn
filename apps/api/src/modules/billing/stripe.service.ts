@@ -47,7 +47,7 @@ export class StripeBillingService {
   reconcileExpiredCheckouts() {
     return this.prisma.billingCheckoutSession.updateMany({
       where: { provider: 'STRIPE', status: 'PENDING', expiresAt: { lte: new Date() } },
-      data: { status: 'EXPIRED' },
+      data: { status: 'EXPIRED', activeLock: null },
     });
   }
   async customer(organizationId: string, userId: string) {
@@ -98,33 +98,68 @@ export class StripeBillingService {
       },
     });
     if (existing) return existing;
-    const customerId = await this.customer(context.organizationId, context.userId);
-    const session = await this.provider.createCheckout({
-      customerId,
-      priceId,
-      organizationId: context.organizationId,
-      plan,
-      idempotencyKey: key,
-    });
-    const local = await this.prisma.billingCheckoutSession.create({
-      data: {
+    let local;
+    try {
+      local = await this.prisma.billingCheckoutSession.create({
+        data: {
         organizationId: context.organizationId,
         planId: planRecord.id,
         requestedById: context.userId,
         provider: 'STRIPE',
-        providerCheckoutId: session.id,
         idempotencyKey: key,
         amountCents: planRecord.priceCents!,
         currency: planRecord.currency,
-        checkoutUrl: session.url,
-        expiresAt: unix(session.expires_at),
-      },
-    });
+          expiresAt: new Date(Date.now() + 30 * 60_000),
+          activeLock: context.organizationId,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const pending = await this.prisma.billingCheckoutSession.findFirst({
+          where: {
+            organizationId: context.organizationId,
+            activeLock: context.organizationId,
+            status: 'PENDING',
+          },
+        });
+        if (pending?.checkoutUrl) return pending;
+        throw new AuthError(409, 'CHECKOUT_IN_PROGRESS', 'A checkout is already in progress');
+      }
+      throw error;
+    }
+    try {
+      const customerId = await this.customer(context.organizationId, context.userId);
+      const session = await this.provider.createCheckout({
+        customerId,
+        priceId,
+        organizationId: context.organizationId,
+        plan,
+        idempotencyKey: key,
+      });
+      local = await this.prisma.billingCheckoutSession.update({
+        where: { id: local.id },
+        data: {
+          providerCheckoutId: session.id,
+          checkoutUrl: session.url,
+          expiresAt: unix(session.expires_at),
+        },
+      });
+    } catch (error) {
+      await this.prisma.billingCheckoutSession.update({
+        where: { id: local.id },
+        data: {
+          status: 'FAILED',
+          activeLock: null,
+          errorCode: error instanceof Error ? error.name.slice(0, 64) : 'FAILED',
+        },
+      });
+      throw error;
+    }
     console.info(
       JSON.stringify({
         event: 'stripe.checkout.created',
         organizationId: context.organizationId,
-        checkoutSessionId: session.id,
+        checkoutSessionId: local.providerCheckoutId,
       }),
     );
     return local;
@@ -238,7 +273,7 @@ export class StripeBillingService {
       throw new Error('STRIPE_CUSTOMER_TENANT_MISMATCH');
     await this.prisma.billingCheckoutSession.updateMany({
       where: { providerCheckoutId: session.id, organizationId },
-      data: { status: 'COMPLETED', completedAt: new Date() },
+      data: { status: 'COMPLETED', completedAt: new Date(), activeLock: null },
     });
   }
   private async syncSubscription(remote: Stripe.Subscription, deleted: boolean) {

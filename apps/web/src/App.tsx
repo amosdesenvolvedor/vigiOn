@@ -13,9 +13,10 @@ import { PlatformDashboard } from './platform/PlatformDashboard';
 import { SupportPage } from './support/SupportPage';
 import { PrivacyPolicyPage } from './legal/PrivacyPolicyPage';
 import { TermsOfServicePage } from './legal/TermsOfServicePage';
+import { MfaEnrollment } from './auth/MfaEnrollment';
 
 function ProtectedArea() {
-  const { user, organization, loading, logout } = useAuth();
+  const { user, organization, mfa, loading, logout } = useAuth();
   if (loading)
     return (
       <main className="grid min-h-screen place-items-center bg-slate-950 text-slate-300">
@@ -23,6 +24,8 @@ function ProtectedArea() {
       </main>
     );
   if (!user || !organization) return <AuthScreen />;
+  if (window.location.pathname.startsWith('/platform') && user.platformRole === 'PLATFORM_ADMIN' && !mfa?.enrolled)
+    return <MfaEnrollment />;
   if (window.location.pathname.startsWith('/platform'))
     return user.platformRole === 'PLATFORM_ADMIN' ? (
       <PlatformDashboard logout={logout} />

@@ -34,6 +34,7 @@ services:
       WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-mailto:security@vigion.cloud}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       CAMERA_CREDENTIAL_KEY: ${CAMERA_CREDENTIAL_KEY:-}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
       GATEWAY_PAIRING_TTL_MINUTES: ${GATEWAY_PAIRING_TTL_MINUTES:-10}
       GATEWAY_OFFLINE_TIMEOUT_SECONDS: ${GATEWAY_OFFLINE_TIMEOUT_SECONDS:-120}
       GATEWAY_COMMAND_TTL_SECONDS: ${GATEWAY_COMMAND_TTL_SECONDS:-300}
@@ -74,6 +75,14 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '5' }
 
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
@@ -91,6 +100,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 20
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '5' }
 
   web:
     build:
@@ -103,6 +115,11 @@ services:
       - '127.0.0.1:5173:80'
     depends_on:
       - api
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '5' }
 
   proxy:
     image: caddy:2-alpine
@@ -118,6 +135,9 @@ services:
     depends_on:
       - api
       - web
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '5' }
 
 volumes:
   mariadb_data:

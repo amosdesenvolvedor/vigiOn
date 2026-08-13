@@ -19,6 +19,7 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().min(3).default('VigiOn <no-reply@vigion.cloud>'),
   RESEND_API_KEY: optionalSecret(20),
   CAMERA_CREDENTIAL_KEY: optionalSecret(43),
+  MFA_ENCRYPTION_KEY: optionalSecret(43),
   GATEWAY_PAIRING_TTL_MINUTES: z.coerce.number().int().min(1).max(60).default(10),
   GATEWAY_OFFLINE_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(3600).default(120),
   GATEWAY_COMMAND_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
@@ -84,6 +85,9 @@ if (parsed.success && parsed.data.BILLING_ENABLED) {
     console.error('Invalid Stripe configuration; missing variables:', missing.join(', '));
     throw new Error(`Stripe billing configuration is incomplete: ${missing.join(', ')}`);
   }
+}
+if (parsed.success && parsed.data.NODE_ENV === 'production' && !parsed.data.MFA_ENCRYPTION_KEY) {
+  throw new Error('MFA_ENCRYPTION_KEY is required in production');
 }
 if (!parsed.success) {
   console.error('Invalid environment configuration', parsed.error.flatten().fieldErrors);

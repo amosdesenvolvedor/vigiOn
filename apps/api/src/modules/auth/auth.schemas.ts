@@ -26,6 +26,13 @@ export const registerSchema = z
 export const loginSchema = z.object({
   email: z.string().trim().email().max(254),
   password: z.string().min(1).max(128),
+  mfaCode: z.string().trim().min(6).max(32).optional(),
+});
+
+export const mfaCodeSchema = z.object({ code: z.string().trim().min(6).max(32) });
+export const mfaDisableSchema = z.object({
+  password: z.string().min(1).max(128),
+  code: z.string().trim().min(6).max(32),
 });
 
 export const emailSchema = z.object({ email: z.string().trim().email().max(254) });

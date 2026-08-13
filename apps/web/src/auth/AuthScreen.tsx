@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { apiRequest } from './api';
+import { ApiError, apiRequest } from './api';
 import { useAuth } from './AuthContext';
 
 type View = 'login' | 'register' | 'forgot' | 'reset';
@@ -12,6 +12,8 @@ export function AuthScreen() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [loginCredentials, setLoginCredentials] = useState<{ email: string; password: string } | null>(null);
   const { login, register } = useAuth();
 
   useEffect(() => {
@@ -56,8 +58,10 @@ export function AuthScreen() {
       </>
     ) : view === 'login' ? (
       <>
-        <Field name="email" label="E-mail" type="email" autoComplete="email" />
-        <Field name="password" label="Senha" type="password" autoComplete="current-password" />
+        {!mfaRequired ? <>
+          <Field name="email" label="E-mail" type="email" autoComplete="email" />
+          <Field name="password" label="Senha" type="password" autoComplete="current-password" />
+        </> : <Field name="mfaCode" label="Código do autenticador ou recuperação" autoComplete="one-time-code" />}
       </>
     ) : view === 'forgot' ? (
       <Field name="email" label="E-mail" type="email" autoComplete="email" />
@@ -75,7 +79,18 @@ export function AuthScreen() {
     );
 
   const action = async (data: FormData) => {
-    if (view === 'login') return login(String(data.get('email')), String(data.get('password')));
+    if (view === 'login') {
+      if (mfaRequired && loginCredentials)
+        return login(loginCredentials.email, loginCredentials.password, String(data.get('mfaCode')));
+      const credentials = { email: String(data.get('email')), password: String(data.get('password')) };
+      try { return await login(credentials.email, credentials.password); }
+      catch (reason) {
+        if (reason instanceof ApiError && reason.code === 'MFA_REQUIRED') {
+          setLoginCredentials(credentials); setMfaRequired(true); setMessage('Informe o código de autenticação em duas etapas.'); return;
+        }
+        throw reason;
+      }
+    }
     if (view === 'register')
       return register({
         name: String(data.get('name')),

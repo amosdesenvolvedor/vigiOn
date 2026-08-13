@@ -24,6 +24,7 @@ import { realtimeRouter } from './modules/realtime/realtime.routes';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes';
 import { platformRouter } from './modules/platform/platform.routes';
 import { stripeWebhookRouter, paymentRouter } from './modules/billing/payment.routes';
+import { requestContext } from './lib/logger';
 
 export const createApp = () => {
   const app = express();
@@ -31,7 +32,8 @@ export const createApp = () => {
   app.disable('x-powered-by');
   if (env.NODE_ENV === 'production') app.set('trust proxy', 1);
   app.use(helmet());
-  app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
+  app.use(cors({ origin: [env.WEB_ORIGIN], credentials: true, methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'], allowedHeaders: ['authorization', 'content-type', 'x-request-id'] }));
+  app.use(requestContext);
   app.use(
     '/api/v1/webhooks',
     express.raw({ type: 'application/json', limit: '256kb' }),

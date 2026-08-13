@@ -8,49 +8,36 @@ import { eventService } from './modules/events/event.routes';
 import { notificationService } from './modules/notifications/notification.routes';
 import { realtimeService } from './modules/realtime/realtime.service';
 import { stripeBillingService } from './modules/billing/payment.routes';
+import { runWorker } from './lib/worker-health';
+import { logger } from './lib/logger';
 
 const server = createServer(createApp());
 const streamService = new StreamSessionService(prisma);
 const streamCleanup = setInterval(() => {
-  void streamService.cleanup().catch((error: unknown) =>
-    console.error(
-      JSON.stringify({
-        event: 'stream.cleanup_failed',
-        errorCode: error instanceof Error ? error.name : 'UNKNOWN',
-      }),
-    ),
-  );
+  void runWorker('stream-cleanup', () => streamService.cleanup());
 }, 30_000);
 streamCleanup.unref();
 const retentionWorker = setInterval(() => {
-  void mediaService
-    .retentionBatch()
-    .catch(() => console.error(JSON.stringify({ event: 'retention.worker_failed' })));
+  void runWorker('media-retention', () => mediaService.retentionBatch());
 }, env.RETENTION_INTERVAL_SECONDS * 1000);
 retentionWorker.unref();
 const gatewayReconcileWorker = setInterval(() => {
-  void eventService
-    .reconcileOfflineGateways()
-    .catch(() => console.error(JSON.stringify({ event: 'gateway.reconcile_failed' })));
+  void runWorker('gateway-reconcile', () => eventService.reconcileOfflineGateways());
 }, env.GATEWAY_RECONCILE_INTERVAL_SECONDS * 1000);
 gatewayReconcileWorker.unref();
 const notificationWorker = setInterval(() => {
-  void notificationService
-    .dispatchBatch()
-    .catch(() => console.error(JSON.stringify({ event: 'notification.worker_failed' })));
+  void runWorker('notification-dispatch', () => notificationService.dispatchBatch());
 }, env.NOTIFICATION_WORKER_INTERVAL_SECONDS * 1000);
 notificationWorker.unref();
 const realtimeHeartbeat = setInterval(() => realtimeService.heartbeat(), 20_000);
 realtimeHeartbeat.unref();
 const billingReconcileWorker = setInterval(() => {
-  void stripeBillingService
-    .reconcileExpiredCheckouts()
-    .catch(() => console.error(JSON.stringify({ event: 'billing.reconcile_failed' })));
+  void runWorker('billing-reconcile', () => stripeBillingService.reconcileExpiredCheckouts());
 }, env.BILLING_RECONCILE_INTERVAL_SECONDS * 1000);
 billingReconcileWorker.unref();
 
 server.listen(env.API_PORT, env.API_HOST, () => {
-  console.log(`VigiOn API listening on http://${env.API_HOST}:${env.API_PORT}`);
+  logger.info('api.started', { host: env.API_HOST, port: env.API_PORT });
 });
 
 const shutdown = async (signal: string) => {
@@ -60,7 +47,7 @@ const shutdown = async (signal: string) => {
   clearInterval(notificationWorker);
   clearInterval(realtimeHeartbeat);
   clearInterval(billingReconcileWorker);
-  console.log(`${signal} received; shutting down`);
+  logger.info('api.shutdown', { signal });
   server.close(async () => {
     await prisma.$disconnect();
     process.exit(0);

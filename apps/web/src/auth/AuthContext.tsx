@@ -17,7 +17,8 @@ interface AuthContextValue {
   user: User | null;
   organization: Organization | null;
   loading: boolean;
-  login(email: string, password: string): Promise<void>;
+  mfa: { enrolled: boolean; pending: boolean } | null;
+  login(email: string, password: string, mfaCode?: string): Promise<void>;
   register(input: RegisterInput): Promise<void>;
   logout(): Promise<void>;
   reload(): Promise<void>;
@@ -37,11 +38,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mfa, setMfa] = useState<{ enrolled: boolean; pending: boolean } | null>(null);
 
   const loadMe = async () => {
-    const data = await apiRequest<{ user: User; organization: Organization }>('/auth/me');
+    const data = await apiRequest<{ user: User; organization: Organization; mfa: { enrolled: boolean; pending: boolean } }>('/auth/me');
     setUser(data.user);
     setOrganization(data.organization);
+    setMfa(data.mfa);
   };
 
   useEffect(() => {
@@ -54,10 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, mfaCode?: string) => {
     const data = await apiRequest<{ session: { accessToken: string } }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, mfaCode }),
     });
     setAccessToken(data.session.accessToken);
     await loadMe();
@@ -92,10 +95,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(null);
       setUser(null);
       setOrganization(null);
+      setMfa(null);
     }
   };
 
-  const value = { user, organization, loading, login, register, logout, reload: loadMe };
+  const value = { user, organization, mfa, loading, login, register, logout, reload: loadMe };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

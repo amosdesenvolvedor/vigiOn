@@ -9,6 +9,7 @@ export const notFoundHandler: RequestHandler = (_request, response) => {
 };
 
 export const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
+  const requestId = response.locals.requestId as string | undefined;
   if (
     error instanceof SyntaxError &&
     'status' in error &&
@@ -35,7 +36,7 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
     return;
   }
   if (error instanceof AuthError) {
-    response.status(error.status).json({ error: { code: error.code, message: error.message } });
+    response.status(error.status).json({ error: { code: error.code, message: error.message, requestId } });
     return;
   }
   if (error instanceof ZodError) {
@@ -44,6 +45,7 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
         code: 'VALIDATION_ERROR',
         message: 'Invalid request',
         fields: error.flatten().fieldErrors,
+        requestId,
       },
     });
     return;
@@ -56,6 +58,6 @@ export const errorHandler: ErrorRequestHandler = (error, _request, response, _ne
   }
   console.error(error);
   response.status(500).json({
-    error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
+    error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred', requestId },
   });
 };

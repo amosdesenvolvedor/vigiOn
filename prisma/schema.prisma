@@ -389,10 +389,36 @@ model User {
   sentInvitations         OrganizationInvitation[] @relation("InvitationSender")
   pushSubscriptions       PushSubscription[]
   platformAuditLogs       PlatformAuditLog[]       @relation("PlatformAuditActor")
+  mfaCredential           MfaCredential?
+  mfaRecoveryCodes        MfaRecoveryCode[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, deletedAt])
   @@index([organizationId, role])
+}
+
+model MfaCredential {
+  id              String    @id @default(uuid()) @db.Char(36)
+  userId          String    @unique @db.Char(36)
+  encryptedSecret String    @db.Text
+  enabledAt       DateTime? @db.DateTime(3)
+  lastUsedStep    BigInt?
+  createdAt       DateTime  @default(now()) @db.DateTime(3)
+  updatedAt       DateTime  @updatedAt @db.DateTime(3)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([enabledAt])
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(uuid()) @db.Char(36)
+  userId    String    @db.Char(36)
+  codeHash  String    @unique @db.Char(64)
+  usedAt    DateTime? @db.DateTime(3)
+  createdAt DateTime  @default(now()) @db.DateTime(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
 }
 
 model OrganizationMembership {
@@ -456,6 +482,7 @@ model Session {
   expiresAt      DateTime  @db.DateTime(3)
   revokedAt      DateTime? @db.DateTime(3)
   lastUsedAt     DateTime? @db.DateTime(3)
+  mfaVerifiedAt  DateTime? @db.DateTime(3)
   replacedById   String?   @db.Char(36)
   ipAddress      String?   @db.VarChar(45)
   userAgent      String?   @db.VarChar(512)
@@ -992,6 +1019,7 @@ model BillingCheckoutSession {
   expiresAt          DateTime              @db.DateTime(3)
   completedAt        DateTime?             @db.DateTime(3)
   errorCode          String?               @db.VarChar(64)
+  activeLock         String?               @unique @db.Char(36)
   createdAt          DateTime              @default(now()) @db.DateTime(3)
   updatedAt          DateTime              @updatedAt @db.DateTime(3)
   organization       Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
@@ -1166,4 +1194,17 @@ model PlatformAuditLog {
   @@index([actorUserId, createdAt])
   @@index([action, createdAt])
   @@index([entityType, entityId, createdAt])
+}
+
+model WorkerHealth {
+  name          String    @id @db.VarChar(100)
+  status        String    @db.VarChar(16)
+  lastStartedAt DateTime? @db.DateTime(3)
+  lastSuccessAt DateTime? @db.DateTime(3)
+  lastFailureAt DateTime? @db.DateTime(3)
+  lastErrorCode String?   @db.VarChar(100)
+  durationMs    Int?
+  updatedAt     DateTime  @updatedAt @db.DateTime(3)
+
+  @@index([status, updatedAt])
 }

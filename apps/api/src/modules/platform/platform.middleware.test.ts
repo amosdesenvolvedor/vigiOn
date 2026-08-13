@@ -4,7 +4,8 @@ import type { UserRole } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const findFirst = vi.hoisted(() => vi.fn());
-vi.mock('../../lib/prisma', () => ({ prisma: { user: { findFirst } } }));
+const findSession = vi.hoisted(() => vi.fn());
+vi.mock('../../lib/prisma', () => ({ prisma: { user: { findFirst }, session: { findFirst: findSession } } }));
 
 import { requirePlatformAdmin } from './platform.middleware';
 
@@ -34,7 +35,10 @@ const appFor = (authenticated: boolean, role: UserRole = 'OWNER') => {
 };
 
 describe('platform authorization', () => {
-  beforeEach(() => findFirst.mockReset());
+  beforeEach(() => {
+    findFirst.mockReset();
+    findSession.mockReset();
+  });
 
   it('rejects anonymous requests', async () => {
     const response = await request(appFor(false)).get('/platform');
@@ -55,8 +59,24 @@ describe('platform authorization', () => {
     },
   );
 
-  it('allows only an active PLATFORM_ADMIN revalidated from the database', async () => {
-    findFirst.mockResolvedValue({ id: 'user-id' });
+  it('rejects a PLATFORM_ADMIN that has not enrolled MFA', async () => {
+    findFirst.mockResolvedValue({ id: 'user-id', mfaCredential: null });
+    const response = await request(appFor(true)).get('/platform');
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe('MFA_ENROLLMENT_REQUIRED');
+  });
+
+  it('rejects a PLATFORM_ADMIN whose current session did not verify MFA', async () => {
+    findFirst.mockResolvedValue({ id: 'user-id', mfaCredential: { enabledAt: new Date() } });
+    findSession.mockResolvedValue(null);
+    const response = await request(appFor(true)).get('/platform');
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe('MFA_REQUIRED');
+  });
+
+  it('allows only an active PLATFORM_ADMIN with MFA revalidated from the database', async () => {
+    findFirst.mockResolvedValue({ id: 'user-id', mfaCredential: { enabledAt: new Date() } });
+    findSession.mockResolvedValue({ id: 'session-id' });
     expect((await request(appFor(true)).get('/platform')).status).toBe(200);
   });
 });

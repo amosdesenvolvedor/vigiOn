@@ -22,3 +22,16 @@ healthRouter.get('/', async (_request, response) => {
 
   response.status(databaseStatus === 'connected' ? 200 : 503).json(body);
 });
+
+healthRouter.get('/live', (_request, response) => {
+  response.json({ status: 'ok', service: 'vigioni-api', timestamp: new Date().toISOString() });
+});
+
+healthRouter.get('/ready', async (_request, response) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    response.json({ status: 'ready', service: 'vigioni-api', timestamp: new Date().toISOString() });
+  } catch {
+    response.status(503).json({ status: 'unavailable', service: 'vigioni-api', timestamp: new Date().toISOString() });
+  }
+});

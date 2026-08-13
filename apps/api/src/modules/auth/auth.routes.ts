@@ -8,16 +8,27 @@ import {
   changePasswordSchema,
   emailSchema,
   loginSchema,
+  mfaCodeSchema,
+  mfaDisableSchema,
   registerSchema,
   resetPasswordSchema,
   tokenSchema,
 } from './auth.schemas';
 import { AuthService } from './auth.service';
+import { MfaService } from './mfa.service';
 import { tokenDelivery } from './token-delivery';
 import type { RequestMetadata } from './auth.types';
 
 export const authRouter = Router();
 const authService = new AuthService(prisma, tokenDelivery);
+const mfaService = new MfaService(prisma);
+const mfaLimiter = rateLimit({
+  windowMs: 5 * 60_000,
+  limit: 8,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: { code: 'MFA_RATE_LIMITED', message: 'Too many MFA attempts; try again later' } },
+});
 const sensitiveLimiter = rateLimit({
   windowMs: 15 * 60_000,
   limit: 10,
@@ -82,7 +93,7 @@ authRouter.post('/register', sensitiveLimiter, async (request, response, next) =
 authRouter.post('/login', sensitiveLimiter, async (request, response, next) => {
   try {
     const input = loginSchema.parse(request.body);
-    const result = await authService.login(input.email, input.password, metadata(request));
+    const result = await authService.login(input.email, input.password, metadata(request), input.mfaCode);
     response.json({
       user: publicUser({ ...result.user, role: result.membership.role }),
       session: setSession(response, result.tokens),
@@ -202,14 +213,44 @@ authRouter.get('/me', authenticate, async (request, response, next) => {
     });
     if (!membership || !organization)
       throw new AuthError(403, 'ORGANIZATION_SUSPENDED', 'Organization is not active');
+    const mfa = await mfaService.status(user.id);
     response.json({
       user: publicUser({ ...user, role: membership.role }),
       organization,
       membership: { id: membership.id, role: membership.role, status: membership.status },
+      mfa,
     });
   } catch (error) {
     next(error);
   }
+});
+
+authRouter.get('/mfa/status', authenticate, async (request, response) => {
+  response.json(await mfaService.status(request.auth!.userId));
+});
+
+authRouter.post('/mfa/enroll', authenticate, mfaLimiter, async (request, response, next) => {
+  try {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: request.auth!.userId }, select: { email: true } });
+    response.json(await mfaService.begin(request.auth!.userId, user.email));
+  } catch (error) { next(error); }
+});
+
+authRouter.post('/mfa/confirm', authenticate, mfaLimiter, async (request, response, next) => {
+  try {
+    const { code } = mfaCodeSchema.parse(request.body);
+    const result = await mfaService.confirm(request.auth!.userId, request.auth!.organizationId, code, metadata(request));
+    await prisma.session.update({ where: { id: request.auth!.sessionId }, data: { mfaVerifiedAt: new Date() } });
+    response.json(result);
+  } catch (error) { next(error); }
+});
+
+authRouter.post('/mfa/disable', authenticate, mfaLimiter, async (request, response, next) => {
+  try {
+    const input = mfaDisableSchema.parse(request.body);
+    await mfaService.disable(request.auth!.userId, request.auth!.organizationId, input.password, input.code, metadata(request));
+    response.clearCookie(refreshCookie, cookieOptions).status(204).send();
+  } catch (error) { next(error); }
 });
 
 authRouter.get('/sessions', authenticate, async (request, response) => {
