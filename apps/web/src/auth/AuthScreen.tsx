@@ -157,6 +157,9 @@ export function AuthScreen() {
             <a href="/suporte" className="hover:text-emerald-300">
               Preciso de suporte
             </a>
+            <a href="/privacidade" className="hover:text-emerald-300">
+              Privacidade
+            </a>
           </nav>
         </div>
       </section>

@@ -162,9 +162,14 @@ export function SupportPage() {
       <footer className="border-t border-slate-800 px-5 py-8 text-sm text-slate-500 sm:px-8">
         <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-3">
           <span>© {new Date().getFullYear()} Vigion Cloud</span>
-          <a href="/" className="hover:text-slate-300">
-            Voltar para vigion.cloud
-          </a>
+          <div className="flex gap-5">
+            <a href="/privacidade" className="hover:text-slate-300">
+              Privacidade
+            </a>
+            <a href="/" className="hover:text-slate-300">
+              Voltar para vigion.cloud
+            </a>
+          </div>
         </div>
       </footer>
     </main>

@@ -11,6 +11,7 @@ import { MonitoringDashboard } from './dashboard/MonitoringDashboard';
 import { MobileExperience } from './mobile/MobileExperience';
 import { PlatformDashboard } from './platform/PlatformDashboard';
 import { SupportPage } from './support/SupportPage';
+import { PrivacyPolicyPage } from './legal/PrivacyPolicyPage';
 
 function ProtectedArea() {
   const { user, organization, loading, logout } = useAuth();
@@ -119,6 +120,8 @@ function ProtectedArea() {
 }
 
 export function App() {
+  if (window.location.pathname === '/privacidade' || window.location.pathname === '/privacidade/')
+    return <PrivacyPolicyPage />;
   if (window.location.pathname === '/suporte' || window.location.pathname === '/suporte/')
     return <SupportPage />;
   return (
