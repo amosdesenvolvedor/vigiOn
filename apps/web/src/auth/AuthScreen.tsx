@@ -160,6 +160,9 @@ export function AuthScreen() {
             <a href="/privacidade" className="hover:text-emerald-300">
               Privacidade
             </a>
+            <a href="/termos" className="hover:text-emerald-300">
+              Termos
+            </a>
           </nav>
         </div>
       </section>

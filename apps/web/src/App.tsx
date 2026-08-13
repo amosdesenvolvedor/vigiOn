@@ -12,6 +12,7 @@ import { MobileExperience } from './mobile/MobileExperience';
 import { PlatformDashboard } from './platform/PlatformDashboard';
 import { SupportPage } from './support/SupportPage';
 import { PrivacyPolicyPage } from './legal/PrivacyPolicyPage';
+import { TermsOfServicePage } from './legal/TermsOfServicePage';
 
 function ProtectedArea() {
   const { user, organization, loading, logout } = useAuth();
@@ -120,6 +121,8 @@ function ProtectedArea() {
 }
 
 export function App() {
+  if (window.location.pathname === '/termos' || window.location.pathname === '/termos/')
+    return <TermsOfServicePage />;
   if (window.location.pathname === '/privacidade' || window.location.pathname === '/privacidade/')
     return <PrivacyPolicyPage />;
   if (window.location.pathname === '/suporte' || window.location.pathname === '/suporte/')

@@ -206,6 +206,7 @@ export function PrivacyPolicyPage() {
         <div className="mx-auto flex max-w-5xl flex-wrap justify-between gap-3">
           <span>© {new Date().getFullYear()} Vigion Cloud</span>
           <div className="flex gap-5">
+            <a href="/termos">Termos</a>
             <a href="/suporte">Suporte</a>
             <a href="/">Plataforma</a>
           </div>

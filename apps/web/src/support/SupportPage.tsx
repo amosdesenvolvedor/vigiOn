@@ -163,6 +163,9 @@ export function SupportPage() {
         <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-3">
           <span>© {new Date().getFullYear()} Vigion Cloud</span>
           <div className="flex gap-5">
+            <a href="/termos" className="hover:text-slate-300">
+              Termos
+            </a>
             <a href="/privacidade" className="hover:text-slate-300">
               Privacidade
             </a>
