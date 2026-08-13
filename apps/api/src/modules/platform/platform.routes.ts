@@ -141,6 +141,7 @@ platformRouter.get('/notifications', async (_req, res, next) => {
 });
 platformRouter.get('/health', async (_req, res) => {
   const startedAt = Date.now();
+  const workers = await prisma.workerHealth.findMany({ orderBy: { name: 'asc' } });
   let database: 'healthy' | 'unavailable' = 'healthy';
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -159,12 +160,7 @@ platformRouter.get('/health', async (_req, res) => {
     database,
     objectStorage: storage,
     realtime: realtimeService.stats(),
-    workers: {
-      retention: 'scheduled',
-      notifications: 'scheduled',
-      gatewayReconciliation: 'scheduled',
-      billingReconciliation: 'scheduled',
-    },
+    workers,
     billing: {
       provider: 'stripe',
       environment: env.BILLING_ENVIRONMENT,

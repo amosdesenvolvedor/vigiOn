@@ -36,6 +36,12 @@ const billingReconcileWorker = setInterval(() => {
 }, env.BILLING_RECONCILE_INTERVAL_SECONDS * 1000);
 billingReconcileWorker.unref();
 
+void runWorker('stream-cleanup', () => streamService.cleanup());
+void runWorker('media-retention', () => mediaService.retentionBatch());
+void runWorker('gateway-reconcile', () => eventService.reconcileOfflineGateways());
+void runWorker('notification-dispatch', () => notificationService.dispatchBatch());
+void runWorker('billing-reconcile', () => stripeBillingService.reconcileExpiredCheckouts());
+
 server.listen(env.API_PORT, env.API_HOST, () => {
   logger.info('api.started', { host: env.API_HOST, port: env.API_PORT });
 });
