@@ -1,4 +1,5 @@
 import type Stripe from 'stripe';
+import { Prisma } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../config/env', () => ({
   env: {
@@ -51,6 +52,39 @@ describe('Stripe billing security boundaries', () => {
     await expect(service.webhook({ id: 'evt_duplicate' } as Stripe.Event)).resolves.toEqual({
       duplicate: true,
     });
+  });
+
+  it('reuses the single active checkout when concurrent reservation loses the unique lock', async () => {
+    const pending = {
+      id: 'checkout-existing',
+      organizationId: 'org-a',
+      checkoutUrl: 'https://checkout.stripe.test/existing',
+      status: 'PENDING',
+    };
+    const createCheckout = vi.fn();
+    const concurrentProvider = { ...provider, createCheckout } as unknown as PaymentProvider;
+    const prisma = {
+      plan: { findFirst: vi.fn(async () => ({ id: 'plan-basic', priceCents: 2990, currency: 'BRL' })) },
+      billingCheckoutSession: {
+        findUnique: vi.fn(async () => null),
+        create: vi.fn(async () => {
+          throw new Prisma.PrismaClientKnownRequestError('Unique checkout lock', {
+            code: 'P2002', clientVersion: '6.19.3', meta: { target: ['activeLock'] },
+          });
+        }),
+        findFirst: vi.fn(async () => pending),
+      },
+    } as never;
+    const service = new StripeBillingService(prisma, concurrentProvider);
+
+    await expect(
+      service.checkout(
+        { organizationId: 'org-a', userId: 'owner-a' } as never,
+        'BASIC',
+        '4e57f5d3-8d2c-48df-a83e-493c3b41bdb1',
+      ),
+    ).resolves.toBe(pending);
+    expect(createCheckout).not.toHaveBeenCalled();
   });
 
   it('rejects subscription metadata that points to another Stripe Customer', async () => {
