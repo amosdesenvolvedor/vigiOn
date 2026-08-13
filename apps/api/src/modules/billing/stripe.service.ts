@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type Stripe from 'stripe';
+import { env } from '../../config/env';
 import { AuthError } from '../auth/auth.errors';
 import type { TenantContext } from '../tenancy/tenant-context';
 import {
@@ -17,7 +18,7 @@ export class StripeBillingService {
     private provider: PaymentProvider,
   ) {}
   configuration() {
-    return { enabled: this.provider.available, provider: 'STRIPE', mode: 'test' };
+    return { enabled: this.provider.available, provider: 'STRIPE', mode: env.BILLING_ENVIRONMENT };
   }
   async history(organizationId: string) {
     const [payments, invoices] = await this.prisma.$transaction([
@@ -174,7 +175,11 @@ export class StripeBillingService {
     });
     if (!inserted.count) return { duplicate: true };
     try {
-      if (event.type.startsWith('customer.subscription.'))
+      if (
+        event.type === 'customer.subscription.created' ||
+        event.type === 'customer.subscription.updated' ||
+        event.type === 'customer.subscription.deleted'
+      )
         await this.syncSubscription(
           event.data.object as Stripe.Subscription,
           event.type === 'customer.subscription.deleted',
@@ -222,8 +227,15 @@ export class StripeBillingService {
   }
   private async checkoutCompleted(session: Stripe.Checkout.Session) {
     const organizationId = session.metadata?.organizationId;
-    if (!organizationId || typeof session.subscription !== 'string')
+    const customerId =
+      typeof session.customer === 'string' ? session.customer : session.customer?.id;
+    if (!organizationId || !customerId || typeof session.subscription !== 'string')
       throw new Error('INVALID_CHECKOUT_METADATA');
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+    if (!organization || organization.stripeCustomerId !== customerId)
+      throw new Error('STRIPE_CUSTOMER_TENANT_MISMATCH');
     await this.prisma.billingCheckoutSession.updateMany({
       where: { providerCheckoutId: session.id, organizationId },
       data: { status: 'COMPLETED', completedAt: new Date() },
@@ -231,9 +243,15 @@ export class StripeBillingService {
   }
   private async syncSubscription(remote: Stripe.Subscription, deleted: boolean) {
     const organizationId = remote.metadata.organizationId;
+    const customerId = typeof remote.customer === 'string' ? remote.customer : remote.customer.id;
     const priceId = remote.items.data[0]?.price.id;
     const planCode = priceId ? stripePlanForPrice(priceId) : undefined;
     if (!organizationId || !priceId || !planCode) throw new Error('INVALID_SUBSCRIPTION_MAPPING');
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+    if (!organization || organization.stripeCustomerId !== customerId)
+      throw new Error('STRIPE_CUSTOMER_TENANT_MISMATCH');
     const plan = await this.prisma.plan.findFirstOrThrow({
       where: { code: planCode, status: 'ACTIVE' },
       orderBy: { version: 'desc' },
@@ -245,6 +263,8 @@ export class StripeBillingService {
       const existing = await tx.subscription.findUnique({
         where: { providerSubscriptionId: remote.id },
       });
+      if (existing && existing.organizationId !== organizationId)
+        throw new Error('STRIPE_SUBSCRIPTION_TENANT_MISMATCH');
       const record = existing
         ? await tx.subscription.update({
             where: { id: existing.id },

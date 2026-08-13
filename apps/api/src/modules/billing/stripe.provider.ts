@@ -14,10 +14,12 @@ export const stripePlanForPrice = (priceId: string) =>
     | PaidPlanCode
     | undefined;
 
-export const mapStripeSubscriptionStatus = (status: Stripe.Subscription.Status) => {
-  const map: Record<
-    Stripe.Subscription.Status,
-    'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'SUSPENDED'
+export const mapStripeSubscriptionStatus = (status: string) => {
+  const map: Partial<
+    Record<
+      Stripe.Subscription.Status,
+      'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'SUSPENDED'
+    >
   > = {
     trialing: 'TRIALING',
     active: 'ACTIVE',
@@ -28,7 +30,7 @@ export const mapStripeSubscriptionStatus = (status: Stripe.Subscription.Status) 
     incomplete_expired: 'CANCELED',
     paused: 'SUSPENDED',
   };
-  return map[status];
+  return map[status as Stripe.Subscription.Status] ?? 'SUSPENDED';
 };
 
 export class StripePaymentProvider implements PaymentProvider {

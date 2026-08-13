@@ -39,5 +39,6 @@ describe('Stripe provider mappings', () => {
     expect(mapStripeSubscriptionStatus('past_due')).toBe('PAST_DUE');
     expect(mapStripeSubscriptionStatus('unpaid')).toBe('SUSPENDED');
     expect(mapStripeSubscriptionStatus('canceled')).toBe('CANCELED');
+    expect(mapStripeSubscriptionStatus('future_unknown_status')).toBe('SUSPENDED');
   });
 });

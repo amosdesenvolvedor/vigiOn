@@ -71,6 +71,20 @@ if (
 ) {
   throw new Error('Both Web Push VAPID keys must be configured together');
 }
+if (parsed.success && parsed.data.BILLING_ENABLED) {
+  const required = [
+    'STRIPE_SECRET_KEY',
+    'STRIPE_WEBHOOK_SECRET',
+    'STRIPE_PRICE_BASIC',
+    'STRIPE_PRICE_PRO',
+    'STRIPE_PRICE_BUSINESS',
+  ] as const;
+  const missing = required.filter((key) => !parsed.data[key]);
+  if (missing.length) {
+    console.error('Invalid Stripe configuration; missing variables:', missing.join(', '));
+    throw new Error(`Stripe billing configuration is incomplete: ${missing.join(', ')}`);
+  }
+}
 if (!parsed.success) {
   console.error('Invalid environment configuration', parsed.error.flatten().fieldErrors);
   throw new Error('Invalid environment configuration');

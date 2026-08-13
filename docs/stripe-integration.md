@@ -29,3 +29,24 @@ stripe listen --forward-to localhost:3000/api/v1/webhooks/stripe
 ```
 
 Copie o `whsec_...` temporário para `STRIPE_WEBHOOK_SECRET`, configure produtos/Prices mensais e habilite billing. Use cartões de teste oficiais. Para produção, troque somente variáveis por valores live, configure `https://vigion.cloud/api/v1/webhooks/stripe` e faça nova homologação; nenhuma mudança de código é necessária.
+
+## Checklist de ativação Live
+
+Não habilite Live automaticamente. Antes da troca, crie no modo Live os produtos recorrentes mensais em BRL: Vigion Cloud Basic (R$ 29,90), Vigion Cloud Pro (R$ 59,90) e Vigion Cloud Business (R$ 119,90). Copie os IDs reais `price_...`; IDs de Sandbox não existem em Live.
+
+Configure no cofre de secrets da infraestrutura, nunca no Git ou no frontend:
+
+```env
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_BASIC=price_...
+STRIPE_PRICE_PRO=price_...
+STRIPE_PRICE_BUSINESS=price_...
+BILLING_ENVIRONMENT=production
+BILLING_ENABLED=true
+```
+
+Crie um novo Event Destination Live apontando para `https://vigion.cloud/api/v1/webhooks/stripe` e selecione: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid` e `invoice.payment_failed`. O Signing Secret Live é diferente do Sandbox.
+
+Procedimento: configurar primeiro com `BILLING_ENABLED=false`, reiniciar e conferir variáveis; habilitar; executar uma compra real controlada; confirmar webhook HTTP 2xx, invoice e `Subscription ACTIVE`; depois cancelar/reembolsar conforme o plano operacional. A `success_url` nunca concede acesso: somente a assinatura Stripe validada por webhook atualiza a Subscription, e os limites continuam vindo do Plan/EntitlementService.
