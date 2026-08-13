@@ -7,7 +7,7 @@ import { mediaService } from './modules/media/media.routes';
 import { eventService } from './modules/events/event.routes';
 import { notificationService } from './modules/notifications/notification.routes';
 import { realtimeService } from './modules/realtime/realtime.service';
-import { billingPaymentService } from './modules/billing/payment.routes';
+import { stripeBillingService } from './modules/billing/payment.routes';
 
 const server = createServer(createApp());
 const streamService = new StreamSessionService(prisma);
@@ -43,7 +43,7 @@ notificationWorker.unref();
 const realtimeHeartbeat = setInterval(() => realtimeService.heartbeat(), 20_000);
 realtimeHeartbeat.unref();
 const billingReconcileWorker = setInterval(() => {
-  void billingPaymentService
+  void stripeBillingService
     .reconcileExpiredCheckouts()
     .catch(() => console.error(JSON.stringify({ event: 'billing.reconcile_failed' })));
 }, env.BILLING_RECONCILE_INTERVAL_SECONDS * 1000);

@@ -52,12 +52,14 @@ const envSchema = z.object({
     .default('false')
     .transform((value) => value === 'true'),
   BILLING_ENVIRONMENT: z.enum(['test', 'production']).default('test'),
-  BILLING_PROVIDER: z.enum(['mercado_pago']).default('mercado_pago'),
-  MERCADO_PAGO_ACCESS_TOKEN: optionalSecret(20),
-  MERCADO_PAGO_WEBHOOK_SECRET: optionalSecret(20),
-  BILLING_SUCCESS_URL: z.string().url().default('http://localhost:5173/billing?result=success'),
-  BILLING_CANCEL_URL: z.string().url().default('http://localhost:5173/billing?result=cancel'),
-  BILLING_PENDING_URL: z.string().url().default('http://localhost:5173/billing?result=pending'),
+  BILLING_PROVIDER: z.enum(['stripe']).default('stripe'),
+  STRIPE_SECRET_KEY: optionalSecret(20),
+  STRIPE_PUBLISHABLE_KEY: optionalSecret(20),
+  STRIPE_WEBHOOK_SECRET: optionalSecret(20),
+  STRIPE_PRICE_BASIC: optionalSecret(5),
+  STRIPE_PRICE_PRO: optionalSecret(5),
+  STRIPE_PRICE_BUSINESS: optionalSecret(5),
+  FRONTEND_URL: z.string().url().default('http://localhost:5173'),
   BILLING_RECONCILE_INTERVAL_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
 });
 

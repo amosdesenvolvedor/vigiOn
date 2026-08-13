@@ -118,16 +118,13 @@ export function BillingPanel() {
     setBusy(true);
     setMessage('Criando checkout seguro…');
     try {
-      const result = await apiRequest<{ checkout: { checkoutUrl: string | null } }>(
-        '/billing/checkout',
-        {
-          method: 'POST',
-          headers: { 'idempotency-key': crypto.randomUUID() },
-          body: JSON.stringify({ planId }),
-        },
-      );
-      if (!result.checkout.checkoutUrl) throw new Error('Checkout indisponível');
-      window.location.assign(result.checkout.checkoutUrl);
+      const result = await apiRequest<{ checkout: { url: string | null } }>('/billing/checkout', {
+        method: 'POST',
+        headers: { 'idempotency-key': crypto.randomUUID() },
+        body: JSON.stringify({ plan: plans.find((plan) => plan.id === planId)?.code }),
+      });
+      if (!result.checkout.url) throw new Error('Checkout indisponível');
+      window.location.assign(result.checkout.url);
     } catch (error) {
       setMessage((error as Error).message);
       setBusy(false);
@@ -137,9 +134,26 @@ export function BillingPanel() {
   useEffect(() => {
     void load().catch((error: Error) => setMessage(error.message));
   }, [organization?.id]);
+  useEffect(() => {
+    if (window.location.pathname !== '/billing/success') return;
+    setMessage('Pagamento recebido. Estamos confirmando sua assinatura com o Stripe…');
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      void load().then(() => {
+        if (attempts >= 6) window.clearInterval(timer);
+      });
+    }, 3_000);
+    return () => window.clearInterval(timer);
+  }, [organization?.id]);
   const action = async (name: 'cancel' | 'reactivate') => {
     try {
-      await apiRequest(`/subscription/${name}`, { method: 'POST' });
+      if (name === 'reactivate') {
+        const portal = await apiRequest<{ url: string }>('/billing/portal', { method: 'POST' });
+        window.location.assign(portal.url);
+        return;
+      }
+      await apiRequest('/billing/cancel', { method: 'POST' });
       setMessage(
         name === 'cancel'
           ? 'Cancelamento agendado para o fim do período.'

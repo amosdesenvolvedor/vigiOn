@@ -1,0 +1,10 @@
+ALTER TABLE `Organization` ADD COLUMN `stripeCustomerId` VARCHAR(191) NULL, ADD UNIQUE INDEX `Organization_stripeCustomerId_key` (`stripeCustomerId`);
+ALTER TABLE `Subscription` MODIFY `billingProvider` ENUM('MERCADO_PAGO','STRIPE') NULL, ADD COLUMN `stripePriceId` VARCHAR(191) NULL;
+ALTER TABLE `BillingCheckoutSession` MODIFY `provider` ENUM('MERCADO_PAGO','STRIPE') NOT NULL DEFAULT 'STRIPE';
+ALTER TABLE `Payment` MODIFY `provider` ENUM('MERCADO_PAGO','STRIPE') NOT NULL DEFAULT 'STRIPE';
+ALTER TABLE `Invoice` MODIFY `provider` ENUM('MERCADO_PAGO','STRIPE') NOT NULL DEFAULT 'STRIPE';
+ALTER TABLE `BillingWebhookEvent` MODIFY `provider` ENUM('MERCADO_PAGO','STRIPE') NOT NULL;
+UPDATE `Plan` SET `priceCents`=0, `maxCameras`=1, `retentionDays`=1 WHERE `code`='FREE' AND `status`='ACTIVE';
+UPDATE `Plan` SET `priceCents`=2990, `maxCameras`=3, `retentionDays`=7 WHERE `code`='BASIC' AND `status`='ACTIVE';
+UPDATE `Plan` SET `priceCents`=5990, `maxCameras`=8, `retentionDays`=15 WHERE `code`='PRO' AND `status`='ACTIVE';
+UPDATE `Plan` SET `priceCents`=11990, `maxCameras`=20, `retentionDays`=30 WHERE `code`='BUSINESS' AND `status`='ACTIVE';

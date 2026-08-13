@@ -1,112 +1,124 @@
-import { Router, type Request } from 'express';
+import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import type Stripe from 'stripe';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { authenticate, requirePermission } from '../auth/auth.middleware';
-import type { RequestMetadata } from '../auth/auth.types';
 import { AuthError } from '../auth/auth.errors';
-import { BillingPaymentService } from './billing-payment.service';
-import { paymentProvider } from './mercado-pago.provider';
+import { StripeBillingService } from './stripe.service';
+import { stripeProvider } from './stripe.provider';
 
 export const paymentRouter = Router();
-export const billingWebhookRouter = Router();
-export const billingPaymentService = new BillingPaymentService(prisma, paymentProvider);
-const mutationLimit = rateLimit({
+export const stripeWebhookRouter = Router();
+export const stripeBillingService = new StripeBillingService(prisma, stripeProvider);
+const mutations = rateLimit({
   windowMs: 60_000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
 });
-const pageSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
-});
-const checkoutSchema = z.object({ planId: z.string().uuid() }).strict();
-const metadata = (request: Request): RequestMetadata => ({
-  ...(request.ip ? { ipAddress: request.ip } : {}),
-  ...(request.get('user-agent') ? { userAgent: request.get('user-agent')!.slice(0, 512) } : {}),
-});
+const planSchema = z.object({ plan: z.enum(['BASIC', 'PRO', 'BUSINESS']) }).strict();
 
 paymentRouter.use(authenticate);
-paymentRouter.get('/configuration', (_req, res) => res.json(billingPaymentService.configuration()));
+paymentRouter.get('/configuration', (_req, res) => res.json(stripeBillingService.configuration()));
 paymentRouter.get('/history', async (req, res, next) => {
   try {
-    const query = pageSchema.parse(req.query);
-    res.json(
-      await billingPaymentService.history(req.auth!.organizationId, query.page, query.limit),
-    );
-  } catch (error) {
-    next(error);
-  }
-});
-paymentRouter.get('/checkout/:id', async (req, res, next) => {
-  try {
-    const session = await billingPaymentService.checkoutStatus(
-      req.auth!.organizationId,
-      z.string().uuid().parse(req.params.id),
-    );
-    if (!session) throw new AuthError(404, 'CHECKOUT_NOT_FOUND', 'Checkout not found');
-    res.json({ checkout: session });
-  } catch (error) {
-    next(error);
+    res.json(await stripeBillingService.history(req.auth!.organizationId));
+  } catch (e) {
+    next(e);
   }
 });
 paymentRouter.post(
   '/checkout',
-  mutationLimit,
+  mutations,
   requirePermission('plan:manage'),
   async (req, res, next) => {
     try {
+      const input = planSchema.parse(req.body);
       const key = z.string().uuid().parse(req.get('idempotency-key'));
-      const input = checkoutSchema.parse(req.body);
-      const checkout = await billingPaymentService.checkout(
-        req.auth!,
-        input.planId,
-        key,
-        metadata(req),
-      );
+      const checkout = await stripeBillingService.checkout(req.auth!, input.plan, key);
       res.status(201).json({
-        checkout: {
-          id: checkout.id,
-          status: checkout.status,
-          checkoutUrl: checkout.checkoutUrl,
-          expiresAt: checkout.expiresAt,
-          amountCents: checkout.amountCents,
-          currency: checkout.currency,
-        },
+        checkout: { id: checkout.id, url: checkout.checkoutUrl, expiresAt: checkout.expiresAt },
       });
-    } catch (error) {
-      next(error);
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+paymentRouter.post(
+  '/portal',
+  mutations,
+  requirePermission('plan:manage'),
+  async (req, res, next) => {
+    try {
+      const portal = await stripeBillingService.portal(req.auth!);
+      res.json({ url: portal.url });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+paymentRouter.post(
+  '/cancel',
+  mutations,
+  requirePermission('plan:manage'),
+  async (req, res, next) => {
+    try {
+      const subscription = await stripeBillingService.cancel(req.auth!);
+      res.json({ subscription });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+paymentRouter.post(
+  '/change-plan',
+  mutations,
+  requirePermission('plan:manage'),
+  async (req, res, next) => {
+    try {
+      res.json(await stripeBillingService.change(req.auth!, planSchema.parse(req.body).plan));
+    } catch (e) {
+      next(e);
     }
   },
 );
 
-const webhookSchema = z
-  .object({
-    id: z.union([z.string(), z.number()]),
-    type: z.string().max(100),
-    data: z.object({ id: z.union([z.string(), z.number()]) }),
-  })
-  .passthrough();
-billingWebhookRouter.post('/mercado-pago', async (req, res, next) => {
+stripeWebhookRouter.post('/stripe', async (req, res, next) => {
+  let event: Stripe.Event;
   try {
-    const body = webhookSchema.parse(req.body);
-    const dataId = String(body.data.id);
-    if (
-      !paymentProvider.verifyWebhook({
-        signature: req.get('x-signature'),
-        requestId: req.get('x-request-id'),
-        dataId,
-      })
-    )
+    if (!Buffer.isBuffer(req.body))
+      throw new AuthError(400, 'RAW_BODY_REQUIRED', 'Raw body required');
+    const signature = req.get('stripe-signature');
+    if (!signature)
       throw new AuthError(401, 'INVALID_WEBHOOK_SIGNATURE', 'Invalid webhook signature');
-    await billingPaymentService.receiveWebhook({
-      eventId: String(body.id),
-      type: body.type,
-      resourceId: dataId,
-    });
-    res.status(200).json({ received: true });
-  } catch (error) {
-    next(error);
+    event = stripeProvider.webhook(req.body, signature);
+    console.info(
+      JSON.stringify({
+        event: 'stripe.webhook.received',
+        stripeEventId: event.id,
+        type: event.type,
+      }),
+    );
+  } catch (e) {
+    next(
+      e instanceof AuthError
+        ? e
+        : new AuthError(401, 'INVALID_WEBHOOK_SIGNATURE', 'Invalid webhook signature'),
+    );
+    return;
+  }
+  try {
+    await stripeBillingService.webhook(event);
+    res.json({ received: true });
+  } catch (e) {
+    console.error(
+      JSON.stringify({
+        event: 'stripe.webhook.processing_failed',
+        stripeEventId: event.id,
+        type: event.type,
+      }),
+    );
+    next(e);
   }
 });

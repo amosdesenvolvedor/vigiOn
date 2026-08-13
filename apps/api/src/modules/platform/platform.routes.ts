@@ -166,9 +166,9 @@ platformRouter.get('/health', async (_req, res) => {
       billingReconciliation: 'scheduled',
     },
     billing: {
-      provider: 'mercado_pago',
+      provider: 'stripe',
       environment: env.BILLING_ENVIRONMENT,
-      status: env.BILLING_ENABLED && env.MERCADO_PAGO_ACCESS_TOKEN ? 'available' : 'disabled',
+      status: env.BILLING_ENABLED && env.STRIPE_SECRET_KEY ? 'available' : 'disabled',
     },
     durationMs: Date.now() - startedAt,
   });

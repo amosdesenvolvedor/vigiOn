@@ -23,7 +23,7 @@ import { intelligenceRouter } from './modules/intelligence/intelligence.routes';
 import { realtimeRouter } from './modules/realtime/realtime.routes';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes';
 import { platformRouter } from './modules/platform/platform.routes';
-import { billingWebhookRouter, paymentRouter } from './modules/billing/payment.routes';
+import { stripeWebhookRouter, paymentRouter } from './modules/billing/payment.routes';
 
 export const createApp = () => {
   const app = express();
@@ -32,6 +32,11 @@ export const createApp = () => {
   if (env.NODE_ENV === 'production') app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
+  app.use(
+    '/api/v1/webhooks',
+    express.raw({ type: 'application/json', limit: '256kb' }),
+    stripeWebhookRouter,
+  );
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
   app.get('/', (_request, response) => response.json({ service: 'vigioni-api' }));
@@ -41,7 +46,6 @@ export const createApp = () => {
   app.use('/api/v1/plans', plansRouter);
   app.use('/api/v1/subscription', subscriptionRouter);
   app.use('/api/v1/billing', paymentRouter);
-  app.use('/api/v1/webhooks', billingWebhookRouter);
   app.use('/api/v1/cameras', cameraRouter);
   app.use('/api/v1/gateways', gatewayRouter);
   app.use('/api/v1/gateway-agent/stream-media', streamMediaRouter);
