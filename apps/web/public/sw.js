@@ -1,4 +1,4 @@
-const CACHE = 'vigion-shell-v1';
+const CACHE = 'vigion-shell-v2';
 const SHELL = [
   '/',
   '/monitoring',
@@ -13,11 +13,14 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))),
-      ),
+    Promise.all([
+      caches
+        .keys()
+        .then((keys) =>
+          Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))),
+        ),
+      self.clients.claim(),
+    ]),
   );
 });
 
@@ -45,9 +48,12 @@ self.addEventListener('fetch', (event) => {
       (cached) =>
         cached ||
         fetch(request).then((response) => {
-          if (response.ok)
-            void caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
-          return response;
+          if (!response.ok) return response;
+          const cacheCopy = response.clone();
+          return caches
+            .open(CACHE)
+            .then((cache) => cache.put(request, cacheCopy))
+            .then(() => response);
         }),
     ),
   );
