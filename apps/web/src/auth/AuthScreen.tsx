@@ -154,6 +154,9 @@ export function AuthScreen() {
             {view === 'forgot' && (
               <button onClick={() => setView('reset')}>Já tenho um token</button>
             )}
+            <a href="/suporte" className="hover:text-emerald-300">
+              Preciso de suporte
+            </a>
           </nav>
         </div>
       </section>
