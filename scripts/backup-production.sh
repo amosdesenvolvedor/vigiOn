@@ -8,8 +8,9 @@ destination="$backup_root/$timestamp"
 mkdir -p "$destination"
 chmod 700 "$destination"
 
-docker compose exec -T db mariadb-dump --single-transaction --routines --events \
-  -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" "${MYSQL_DATABASE}" | gzip -9 > "$destination/database.sql.gz"
+docker compose exec -T db sh -c \
+  'mariadb-dump --single-transaction --routines --events -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
+  | gzip -9 > "$destination/database.sql.gz"
 docker run --rm -v vigion_minio_data:/source:ro -v "$PWD/$destination:/backup" alpine:3.20 \
   tar -C /source -czf /backup/minio-data.tar.gz .
 sha256sum "$destination/database.sql.gz" "$destination/minio-data.tar.gz" > "$destination/SHA256SUMS"
