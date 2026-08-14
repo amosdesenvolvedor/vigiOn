@@ -1,11 +1,13 @@
+import { BrandName } from '../branding/BrandName';
+
 const updatedAt = '13 de agosto de 2026';
 
 const sections = [
   {
     title: '1. Quem somos e a quem esta política se aplica',
     paragraphs: [
-      'Esta Política de Privacidade descreve como o Vigion Cloud trata informações relacionadas aos visitantes do site, titulares de contas, usuários convidados e pessoas que possam aparecer em imagens ou eventos de monitoramento processados pela plataforma.',
-      'Para dados de cadastro, acesso, suporte e relacionamento comercial, o Vigion determina as finalidades essenciais do tratamento. Para imagens, gravações e eventos captados por câmeras de uma organização cliente, essa organização normalmente define a finalidade do monitoramento e atua como controladora; o Vigion fornece a infraestrutura e processa os dados conforme suas instruções e a configuração do serviço.',
+      'Esta Política de Privacidade descreve como o VigiOn Cloud trata informações relacionadas aos visitantes do site, titulares de contas, usuários convidados e pessoas que possam aparecer em imagens ou eventos de monitoramento processados pela plataforma.',
+      'Para dados de cadastro, acesso, suporte e relacionamento comercial, o VigiOn determina as finalidades essenciais do tratamento. Para imagens, gravações e eventos captados por câmeras de uma organização cliente, essa organização normalmente define a finalidade do monitoramento e atua como controladora; o VigiOn fornece a infraestrutura e processa os dados conforme suas instruções e a configuração do serviço.',
     ],
   },
   {
@@ -15,7 +17,7 @@ const sections = [
       'Autenticação e segurança: hash da senha, sessões, endereço IP, navegador, registros de acesso e auditoria. Não armazenamos senhas em texto simples.',
       'Monitoramento: nomes e configurações de câmeras e gateways, imagens, gravações, eventos, alertas, classificações, horários e metadados técnicos enviados pela organização.',
       'Uso do serviço: consumo de armazenamento, quantidade de usuários e câmeras, recursos utilizados, falhas técnicas e registros necessários para operação e prevenção de abuso.',
-      'Assinatura e cobrança: plano, Customer e Subscription IDs, status, invoices, valores e datas. Dados completos do cartão e CVC são coletados pelo Stripe e não são armazenados pelo Vigion.',
+      'Assinatura e cobrança: plano, Customer e Subscription IDs, status, invoices, valores e datas. Dados completos do cartão e CVC são coletados pelo Stripe e não são armazenados pelo VigiOn.',
       'Atendimento: endereço de e-mail, conteúdo da solicitação, anexos e histórico das comunicações enviadas ao suporte.',
       'Dispositivo e notificações: identificadores técnicos e assinatura de push quando o usuário habilita notificações no navegador ou dispositivo.',
     ],
@@ -98,7 +100,7 @@ const sections = [
   {
     title: '11. Crianças, espaços monitorados e responsabilidades',
     paragraphs: [
-      'O serviço é destinado à contratação e administração por pessoas capazes e organizações. O Vigion não orienta a instalação de câmeras em locais onde haja expectativa incompatível de privacidade. A organização cliente deve avaliar sinalização, acesso, proporcionalidade e regras específicas quando o monitoramento puder envolver crianças, adolescentes, empregados ou áreas de acesso público.',
+      'O serviço é destinado à contratação e administração por pessoas capazes e organizações. O VigiOn não orienta a instalação de câmeras em locais onde haja expectativa incompatível de privacidade. A organização cliente deve avaliar sinalização, acesso, proporcionalidade e regras específicas quando o monitoramento puder envolver crianças, adolescentes, empregados ou áreas de acesso público.',
     ],
   },
   {
@@ -114,8 +116,8 @@ export function PrivacyPolicyPage() {
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800 px-5 py-5 sm:px-8">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
-          <a href="/" className="text-xl font-bold tracking-tight">
-            Vigi<span className="text-emerald-400">On</span>
+          <a href="/">
+            <BrandName className="text-xl" />
           </a>
           <div className="flex items-center gap-2 text-sm">
             <a
@@ -143,7 +145,7 @@ export function PrivacyPolicyPage() {
             Política de Privacidade
           </h1>
           <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-300">
-            Esta política explica quais informações o Vigion Cloud trata, para quais finalidades,
+            Esta política explica quais informações o VigiOn Cloud trata, para quais finalidades,
             com quem podem ser compartilhadas e quais medidas adotamos para protegê-las.
           </p>
           <p className="mt-5 text-sm text-slate-500">Última atualização: {updatedAt}</p>
@@ -204,7 +206,7 @@ export function PrivacyPolicyPage() {
 
       <footer className="border-t border-slate-800 px-5 py-8 text-sm text-slate-500 sm:px-8">
         <div className="mx-auto flex max-w-5xl flex-wrap justify-between gap-3">
-          <span>© {new Date().getFullYear()} Vigion Cloud</span>
+          <span>© {new Date().getFullYear()} <BrandName cloud /></span>
           <div className="flex gap-5">
             <a href="/termos">Termos</a>
             <a href="/suporte">Suporte</a>

@@ -1,6 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#020617"/>
-  <path d="M72 256c48-85 109-128 184-128s136 43 184 128c-48 85-109 128-184 128S120 341 72 256Z" fill="#10b981"/>
-  <circle cx="256" cy="256" r="82" fill="#020617"/>
-  <circle cx="256" cy="256" r="42" fill="#a7f3d0"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="VigiOn">
+  <rect width="512" height="512" rx="96" fill="#002421"/>
+  <circle cx="244" cy="286" r="112" fill="none" stroke="#00f0a8" stroke-width="48"/>
+  <path
+    d="M229 210c5-48 45-85 94-85 43 0 80 29 91 70 39 2 70 34 70 74 0 41-33 74-74 74H251c-44 0-80-36-80-80 0-35 23-66 58-76Z"
+    fill="#002421"
+    stroke="#d4d4d4"
+    stroke-width="25"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
 </svg>

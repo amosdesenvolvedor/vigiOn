@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '../auth/api';
+import { BrandName } from '../branding/BrandName';
 
 type Section =
   | 'organizations'
@@ -160,9 +161,7 @@ export function PlatformDashboard({ logout }: { logout(): Promise<void> }) {
       <div className="mx-auto max-w-7xl">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-emerald-900 pb-5">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[.2em] text-emerald-400">
-              Vigion Cloud
-            </p>
+            <p><BrandName cloud className="text-sm" /></p>
             <h1 className="text-3xl font-bold">Administração da plataforma</h1>
             <p className="text-sm text-slate-400">
               Metadados operacionais globais · sem acesso automático à mídia

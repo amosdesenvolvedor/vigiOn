@@ -9,6 +9,14 @@
 5. Smoke-test `/api/v1/health/live`, `/api/v1/health/ready`, login, MFA, tenant routes and a non-billing dashboard read.
 6. Do not create charges, refunds, cancellations or rotate production secrets as a smoke test.
 
+## Social authentication activation
+
+Google and Microsoft OIDC ship disabled and do not require credentials while disabled. Follow
+`docs/social-auth.md`, register the exact production callback URI, store Client Secrets only in the
+API environment, enable one provider at a time and verify provider status, callback, onboarding,
+existing-account conflict and MFA before general availability. Never put provider secrets in the
+frontend build arguments.
+
 ## Backup and restore
 
 Run `scripts/backup-production.sh` from cron with a restricted destination. Keep at least 14 daily generations and copy encrypted archives to an off-host account. Alert when the command exits non-zero or no fresh archive exists. Run `scripts/restore-verify.sh BACKUP.sql.gz` regularly; it imports into a uniquely named temporary database, validates table count and removes only that temporary database. Never restore over production for a test.

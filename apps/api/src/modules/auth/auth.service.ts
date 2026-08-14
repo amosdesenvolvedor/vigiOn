@@ -1,6 +1,12 @@
-import { randomUUID } from 'node:crypto';
-import type { OrganizationMembership, PrismaClient, User } from '@prisma/client';
+import { randomBytes, randomUUID } from 'node:crypto';
+import type {
+  ExternalIdentityProvider,
+  OrganizationMembership,
+  PrismaClient,
+  User,
+} from '@prisma/client';
 import { env } from '../../config/env';
+import { logger } from '../../lib/logger';
 import { AuthError, invalidCredentials } from './auth.errors';
 import { hashPassword, verifyPassword } from './password';
 import { createAccessToken, createOpaqueToken, hashOpaqueToken } from './tokens';
@@ -225,6 +231,285 @@ export class AuthService {
       }),
     ]);
     return { user, membership, tokens };
+  }
+
+  async loginWithExternalIdentity(
+    transactionId: string,
+    identity: {
+      provider: ExternalIdentityProvider;
+      subject: string;
+      email: string;
+      emailVerified: boolean;
+      displayName: string;
+    },
+    metadata: RequestMetadata,
+  ): Promise<
+    | { kind: 'SESSION'; user: User; membership: OrganizationMembership; tokens: AuthTokens }
+    | { kind: 'ONBOARDING' | 'MFA'; completionToken: string }
+  > {
+    const external = await this.prisma.externalIdentity.findUnique({
+      where: {
+        provider_providerSubject: {
+          provider: identity.provider,
+          providerSubject: identity.subject,
+        },
+      },
+      include: {
+        user: {
+          include: {
+            memberships: {
+              where: { status: 'ACTIVE', organization: { status: 'ACTIVE', deletedAt: null } },
+              orderBy: { createdAt: 'asc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    if (external) {
+      const user = external.user;
+      const membership = user.memberships[0];
+      if (user.status !== 'ACTIVE' || user.deletedAt || !membership)
+        throw new AuthError(403, 'OAUTH_ACCOUNT_UNAVAILABLE', 'Account is unavailable');
+      const mfa = await this.mfa.status(user.id);
+      if (mfa.enrolled) {
+        const completionToken = createOpaqueToken();
+        await this.prisma.oAuthTransaction.update({
+          where: { id: transactionId },
+          data: {
+            completionPurpose: 'MFA',
+            completionTokenHash: hashOpaqueToken(completionToken),
+            providerSubject: identity.subject,
+            email: identity.email,
+            emailVerified: identity.emailVerified,
+            displayName: identity.displayName,
+          },
+        });
+        return { kind: 'MFA', completionToken };
+      }
+      const tokens = await this.issueSession(user, membership, metadata);
+      await this.prisma.$transaction([
+        this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
+        this.prisma.auditLog.create({
+          data: {
+            organizationId: membership.organizationId,
+            actorUserId: user.id,
+            action: 'OAUTH_LOGIN_SUCCESS',
+            entityType: 'ExternalIdentity',
+            entityId: external.id,
+            metadata: { provider: identity.provider },
+            ...metadata,
+          },
+        }),
+      ]);
+      return { kind: 'SESSION', user, membership, tokens };
+    }
+
+    const email = normalizeEmail(identity.email);
+    if (await this.prisma.user.findUnique({ where: { normalizedEmail: email } }))
+      throw new AuthError(
+        409,
+        'OAUTH_LINK_REQUIRED',
+        'Sign in with your password before linking this provider',
+      );
+    if (!identity.emailVerified)
+      throw new AuthError(400, 'OAUTH_EMAIL_UNVERIFIED', 'Provider email is not verified');
+
+    const completionToken = createOpaqueToken();
+    await this.prisma.oAuthTransaction.update({
+      where: { id: transactionId },
+      data: {
+        completionPurpose: 'ONBOARDING',
+        completionTokenHash: hashOpaqueToken(completionToken),
+        providerSubject: identity.subject,
+        email: identity.email,
+        emailVerified: true,
+        displayName: identity.displayName,
+      },
+    });
+    return { kind: 'ONBOARDING', completionToken };
+  }
+
+  async completeExternalOnboarding(
+    completionToken: string,
+    input: { name: string; organizationName: string; timezone: string },
+    metadata: RequestMetadata,
+  ) {
+    const transaction = await this.findPendingOAuth(completionToken, 'ONBOARDING');
+    if (
+      !transaction.providerSubject ||
+      !transaction.email ||
+      !transaction.emailVerified ||
+      !transaction.displayName
+    )
+      throw new AuthError(400, 'OAUTH_TRANSACTION_INVALID', 'OAuth transaction is invalid');
+    const normalizedEmail = normalizeEmail(transaction.email);
+    if (await this.prisma.user.findUnique({ where: { normalizedEmail } }))
+      throw new AuthError(409, 'OAUTH_LINK_REQUIRED', 'Account already exists');
+    const freePlan = await this.prisma.plan.findUnique({ where: { slug: 'free' } });
+    if (!freePlan)
+      throw new AuthError(503, 'PLAN_UNAVAILABLE', 'Registration is temporarily unavailable');
+    const now = new Date();
+    const periodEnd = plusDays(30);
+    const passwordHash = await hashPassword(randomBytes(48).toString('base64url'));
+    const result = await this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.oAuthTransaction.updateMany({
+        where: { id: transaction.id, completedAt: null },
+        data: { completedAt: now },
+      });
+      if (consumed.count !== 1)
+        throw new AuthError(400, 'OAUTH_TRANSACTION_REUSED', 'OAuth transaction was already used');
+      const organization = await tx.organization.create({
+        data: {
+          name: input.organizationName,
+          slug: slugify(input.organizationName),
+          timezone: input.timezone,
+          storageUsage: { create: {} },
+          resourceCounter: { create: { memberCount: 1 } },
+        },
+      });
+      const user = await tx.user.create({
+        data: {
+          organizationId: organization.id,
+          name: input.name,
+          email: transaction.email!,
+          normalizedEmail,
+          passwordHash,
+          role: 'OWNER',
+          status: 'ACTIVE',
+          emailVerifiedAt: now,
+        },
+      });
+      const membership = await tx.organizationMembership.create({
+        data: { userId: user.id, organizationId: organization.id, role: 'OWNER', status: 'ACTIVE' },
+      });
+      const externalIdentity = await tx.externalIdentity.create({
+        data: {
+          userId: user.id,
+          provider: transaction.provider,
+          providerSubject: transaction.providerSubject!,
+          email: transaction.email!,
+          emailVerified: true,
+        },
+      });
+      await tx.organizationSettings.create({ data: { organizationId: organization.id } });
+      const subscription = await tx.subscription.create({
+        data: {
+          organizationId: organization.id,
+          planId: freePlan.id,
+          status: 'ACTIVE',
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+        },
+      });
+      await tx.subscriptionHistory.create({
+        data: {
+          organizationId: organization.id,
+          subscriptionId: subscription.id,
+          planId: freePlan.id,
+          planCode: freePlan.code,
+          planVersion: freePlan.version,
+          status: 'ACTIVE',
+          reason: 'SOCIAL_REGISTRATION_FREE',
+          limitsSnapshot: {
+            maxCameras: freePlan.maxCameras,
+            maxStorageBytes: freePlan.maxStorageBytes.toString(),
+            retentionDays: freePlan.retentionDays,
+            maxUsers: freePlan.maxUsers,
+          },
+          featuresSnapshot: freePlan.enabledFeatures as never,
+          periodStart: now,
+          periodEnd,
+        },
+      });
+      await tx.auditLog.createMany({
+        data: [
+          {
+            organizationId: organization.id,
+            actorUserId: user.id,
+            action: 'ORGANIZATION_CREATED',
+            entityType: 'Organization',
+            entityId: organization.id,
+            ...metadata,
+          },
+          {
+            organizationId: organization.id,
+            actorUserId: user.id,
+            action: 'OAUTH_IDENTITY_CREATED',
+            entityType: 'ExternalIdentity',
+            entityId: externalIdentity.id,
+            metadata: { provider: transaction.provider },
+            ...metadata,
+          },
+        ],
+      });
+      return { user, membership };
+    });
+    logger.info('oauth.identity.created', {
+      provider: transaction.provider,
+      userId: result.user.id,
+    });
+    return {
+      ...result,
+      returnTo: transaction.returnTo,
+      tokens: await this.issueSession(result.user, result.membership, metadata),
+    };
+  }
+
+  async completeExternalMfa(completionToken: string, code: string, metadata: RequestMetadata) {
+    const transaction = await this.findPendingOAuth(completionToken, 'MFA');
+    if (!transaction.providerSubject)
+      throw new AuthError(400, 'OAUTH_TRANSACTION_INVALID', 'OAuth transaction is invalid');
+    const external = await this.prisma.externalIdentity.findUnique({
+      where: {
+        provider_providerSubject: {
+          provider: transaction.provider,
+          providerSubject: transaction.providerSubject,
+        },
+      },
+      include: {
+        user: {
+          include: {
+            memberships: {
+              where: { status: 'ACTIVE', organization: { status: 'ACTIVE', deletedAt: null } },
+              orderBy: { createdAt: 'asc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+    const membership = external?.user.memberships[0];
+    if (!external || !membership || external.user.status !== 'ACTIVE' || external.user.deletedAt)
+      throw new AuthError(403, 'OAUTH_ACCOUNT_UNAVAILABLE', 'Account is unavailable');
+    await this.mfa.verify(external.user.id, membership.organizationId, code, metadata);
+    const consumed = await this.prisma.oAuthTransaction.updateMany({
+      where: { id: transaction.id, completedAt: null },
+      data: { completedAt: new Date() },
+    });
+    if (consumed.count !== 1)
+      throw new AuthError(400, 'OAUTH_TRANSACTION_REUSED', 'OAuth transaction was already used');
+    return {
+      user: external.user,
+      membership,
+      returnTo: transaction.returnTo,
+      tokens: await this.issueSession(external.user, membership, metadata, true),
+    };
+  }
+
+  private async findPendingOAuth(completionToken: string, purpose: 'ONBOARDING' | 'MFA') {
+    const transaction = await this.prisma.oAuthTransaction.findUnique({
+      where: { completionTokenHash: hashOpaqueToken(completionToken) },
+    });
+    if (
+      !transaction ||
+      transaction.completionPurpose !== purpose ||
+      transaction.completedAt ||
+      transaction.expiresAt <= new Date()
+    )
+      throw new AuthError(400, 'OAUTH_TRANSACTION_INVALID', 'OAuth transaction is invalid or expired');
+    return transaction;
   }
 
   async refresh(rawToken: string, metadata: RequestMetadata): Promise<AuthTokens> {

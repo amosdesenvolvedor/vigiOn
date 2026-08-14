@@ -1,22 +1,24 @@
+import { BrandName } from '../branding/BrandName';
+
 const supportEmail = 'suporte@vigion.cloud';
 
 const channels = [
   {
     title: 'Suporte técnico',
     description: 'Ajuda com câmeras, gateways, transmissão, eventos e notificações.',
-    subject: 'Suporte técnico — Vigion Cloud',
+    subject: 'Suporte técnico — VigiOn Cloud',
     action: 'Solicitar suporte',
   },
   {
     title: 'Conta e acesso',
     description: 'Recuperação de acesso, organizações, usuários e permissões.',
-    subject: 'Conta e acesso — Vigion Cloud',
+    subject: 'Conta e acesso — VigiOn Cloud',
     action: 'Falar sobre minha conta',
   },
   {
     title: 'Planos e cobrança',
     description: 'Dúvidas sobre planos, assinatura, pagamento, upgrade ou cancelamento.',
-    subject: 'Planos e cobrança — Vigion Cloud',
+    subject: 'Planos e cobrança — VigiOn Cloud',
     action: 'Tirar dúvida de cobrança',
   },
 ];
@@ -30,7 +32,7 @@ const questions = [
   {
     question: 'Posso enviar senhas ou dados do cartão?',
     answer:
-      'Não. A equipe Vigion nunca solicitará sua senha, código de autenticação, chave de câmera, número completo do cartão ou CVC por e-mail.',
+      'Não. A equipe VigiOn nunca solicitará sua senha, código de autenticação, chave de câmera, número completo do cartão ou CVC por e-mail.',
   },
   {
     question: 'Como acompanho um problema de pagamento?',
@@ -38,15 +40,15 @@ const questions = [
       'Envie o e-mail da conta e a data aproximada da cobrança. Não envie dados completos do cartão. Pagamentos e assinaturas são processados com segurança pelo Stripe.',
   },
   {
-    question: 'O Vigion substitui serviços de emergência?',
+    question: 'O VigiOn substitui serviços de emergência?',
     answer:
-      'Não. Em situação de risco imediato, procure os serviços públicos de emergência da sua região. O suporte Vigion atende questões relacionadas à plataforma.',
+      'Não. Em situação de risco imediato, procure os serviços públicos de emergência da sua região. O suporte VigiOn atende questões relacionadas à plataforma.',
   },
 ];
 
 const mailto = (subject: string) =>
   `mailto:${supportEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
-    'Olá, equipe Vigion.\n\nOrganização:\nE-mail da conta:\nDescrição da dúvida ou problema:\nHorário aproximado:\n\n',
+    'Olá, equipe VigiOn.\n\nOrganização:\nE-mail da conta:\nDescrição da dúvida ou problema:\nHorário aproximado:\n\n',
   )}`;
 
 export function SupportPage() {
@@ -54,8 +56,8 @@ export function SupportPage() {
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800 bg-slate-950/90 px-5 py-5 backdrop-blur sm:px-8">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <a href="/" className="text-xl font-bold tracking-tight" aria-label="Vigion Cloud">
-            Vigi<span className="text-emerald-400">On</span>
+          <a href="/" aria-label="VigiOn Cloud">
+            <BrandName className="text-xl" />
           </a>
           <a
             href="/"
@@ -79,7 +81,7 @@ export function SupportPage() {
             e pagamentos.
           </p>
           <a
-            href={mailto('Atendimento — Vigion Cloud')}
+            href={mailto('Atendimento — VigiOn Cloud')}
             className="mt-9 inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-400 px-6 font-semibold text-slate-950 transition hover:bg-emerald-300"
           >
             Enviar e-mail para o suporte
@@ -161,7 +163,7 @@ export function SupportPage() {
 
       <footer className="border-t border-slate-800 px-5 py-8 text-sm text-slate-500 sm:px-8">
         <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-3">
-          <span>© {new Date().getFullYear()} Vigion Cloud</span>
+          <span>© {new Date().getFullYear()} <BrandName cloud /></span>
           <div className="flex gap-5">
             <a href="/termos" className="hover:text-slate-300">
               Termos

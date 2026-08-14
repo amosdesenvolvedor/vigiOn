@@ -52,6 +52,16 @@ enum PlatformRole {
   PLATFORM_ADMIN
 }
 
+enum ExternalIdentityProvider {
+  GOOGLE
+  MICROSOFT
+}
+
+enum OAuthCompletionPurpose {
+  ONBOARDING
+  MFA
+}
+
 enum CameraAdministrativeStatus {
   ACTIVE
   DISABLED
@@ -391,10 +401,50 @@ model User {
   platformAuditLogs       PlatformAuditLog[]       @relation("PlatformAuditActor")
   mfaCredential           MfaCredential?
   mfaRecoveryCodes        MfaRecoveryCode[]
+  externalIdentities      ExternalIdentity[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, deletedAt])
   @@index([organizationId, role])
+}
+
+model ExternalIdentity {
+  id              String                   @id @default(uuid()) @db.Char(36)
+  userId          String                   @db.Char(36)
+  provider        ExternalIdentityProvider
+  providerSubject String                   @db.VarChar(191)
+  email           String                   @db.VarChar(254)
+  emailVerified   Boolean                  @default(false)
+  createdAt       DateTime                 @default(now()) @db.DateTime(3)
+  updatedAt       DateTime                 @updatedAt @db.DateTime(3)
+  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject])
+  @@index([userId, provider])
+  @@index([email])
+}
+
+model OAuthTransaction {
+  id                  String                   @id @default(uuid()) @db.Char(36)
+  provider            ExternalIdentityProvider
+  stateHash           String                   @unique @db.Char(64)
+  pkceVerifier        String                   @db.VarChar(128)
+  nonce               String                   @db.VarChar(128)
+  returnTo            String                   @db.VarChar(255)
+  expiresAt           DateTime                 @db.DateTime(3)
+  usedAt              DateTime?                @db.DateTime(3)
+  completionPurpose   OAuthCompletionPurpose?
+  completionTokenHash String?                  @unique @db.Char(64)
+  providerSubject     String?                  @db.VarChar(191)
+  email               String?                  @db.VarChar(254)
+  emailVerified       Boolean?
+  displayName         String?                  @db.VarChar(160)
+  completedAt         DateTime?                @db.DateTime(3)
+  createdAt           DateTime                 @default(now()) @db.DateTime(3)
+  updatedAt           DateTime                 @updatedAt @db.DateTime(3)
+
+  @@index([provider, expiresAt, usedAt])
+  @@index([expiresAt, completedAt])
 }
 
 model MfaCredential {

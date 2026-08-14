@@ -14,6 +14,7 @@ import { SupportPage } from './support/SupportPage';
 import { PrivacyPolicyPage } from './legal/PrivacyPolicyPage';
 import { TermsOfServicePage } from './legal/TermsOfServicePage';
 import { MfaEnrollment } from './auth/MfaEnrollment';
+import { BrandName } from './branding/BrandName';
 
 function ProtectedArea() {
   const { user, organization, mfa, loading, logout } = useAuth();
@@ -48,7 +49,7 @@ function ProtectedArea() {
       <div className="mx-auto max-w-5xl">
         <header className="flex items-center justify-between gap-4 border-b border-slate-800 pb-6">
           <div>
-            <strong className="text-xl">VigiOn</strong>
+            <BrandName className="text-xl" />
             <p className="text-sm text-slate-400">{organization.name}</p>
           </div>
           <div className="flex items-center gap-2">

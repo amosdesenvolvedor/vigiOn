@@ -1,10 +1,12 @@
+import { BrandName } from '../branding/BrandName';
+
 const updatedAt = '13 de agosto de 2026';
 
 const sections = [
   {
     title: '1. Aceitação e objeto',
     paragraphs: [
-      'Estes Termos de Serviço regulam o acesso e o uso do Vigion Cloud, plataforma de monitoramento em nuvem que permite administrar organizações, usuários, câmeras, gateways, transmissões, eventos, alertas e armazenamento conforme o plano contratado.',
+      'Estes Termos de Serviço regulam o acesso e o uso do VigiOn Cloud, plataforma de monitoramento em nuvem que permite administrar organizações, usuários, câmeras, gateways, transmissões, eventos, alertas e armazenamento conforme o plano contratado.',
       'Ao criar uma conta, aceitar um convite, contratar um plano ou utilizar a plataforma, você declara que leu e concorda com estes Termos e com a Política de Privacidade. Se estiver representando uma empresa ou organização, declara possuir poderes para vinculá-la.',
     ],
   },
@@ -22,7 +24,7 @@ const sections = [
     title: '3. Instalação e uso do monitoramento',
     paragraphs: [
       'A organização é responsável pela instalação, posicionamento, conectividade, alimentação elétrica e manutenção de câmeras, gateways e redes sob seu controle. Também é responsável por possuir autorizações e fundamentos jurídicos adequados para captar, visualizar, gravar e compartilhar imagens, sons ou eventos.',
-      'O Vigion não orienta o monitoramento clandestino nem o uso de câmeras em locais com expectativa incompatível de privacidade. O cliente deve avaliar sinalização, acesso às imagens e regras aplicáveis a residências, condomínios, empresas, empregados, crianças e áreas públicas.',
+      'O VigiOn não orienta o monitoramento clandestino nem o uso de câmeras em locais com expectativa incompatível de privacidade. O cliente deve avaliar sinalização, acesso às imagens e regras aplicáveis a residências, condomínios, empresas, empregados, crianças e áreas públicas.',
     ],
   },
   {
@@ -37,7 +39,7 @@ const sections = [
     bullets: [
       'Planos pagos são assinaturas recorrentes mensais processadas pelo Stripe.',
       'Ao contratar, você autoriza as cobranças recorrentes do plano selecionado até o cancelamento.',
-      'Dados completos do cartão são coletados pelo Stripe e não são armazenados pelo Vigion.',
+      'Dados completos do cartão são coletados pelo Stripe e não são armazenados pelo VigiOn.',
       'Tributos, documentos e valores aplicáveis serão apresentados no checkout ou na área de cobrança.',
       'Falha de pagamento pode colocar a assinatura em atraso, restringir recursos pagos ou resultar em suspensão conforme as tentativas e o estado informado pelo Stripe.',
       'Upgrade e downgrade utilizam a assinatura existente quando aplicável. Ajustes proporcionais, créditos e datas de cobrança são calculados pelo Stripe e apresentados no fluxo correspondente.',
@@ -52,7 +54,7 @@ const sections = [
   },
   {
     title: '7. Uso aceitável',
-    paragraphs: ['É proibido usar o Vigion Cloud para:'],
+    paragraphs: ['É proibido usar o VigiOn Cloud para:'],
     bullets: [
       'Violar privacidade, proteção de dados, propriedade intelectual ou qualquer lei aplicável.',
       'Monitorar pessoas ou espaços sem autorização ou fundamento jurídico quando exigidos.',
@@ -67,7 +69,7 @@ const sections = [
     title: '8. Alertas, detecções e limitações técnicas',
     paragraphs: [
       'Detecção de movimento, classificações, alertas e recursos de inteligência são ferramentas auxiliares e podem produzir falsos positivos, falsos negativos, atrasos ou indisponibilidade. O desempenho depende de câmera, iluminação, conexão, configuração, ambiente e serviços externos.',
-      'O Vigion não é central pública de emergência, empresa de vigilância presencial, seguradora ou garantia de prevenção de crimes, acidentes ou perdas. Em risco imediato, contate os serviços públicos competentes. O cliente deve manter medidas físicas e operacionais apropriadas e não depender exclusivamente da plataforma.',
+      'O VigiOn não é central pública de emergência, empresa de vigilância presencial, seguradora ou garantia de prevenção de crimes, acidentes ou perdas. Em risco imediato, contate os serviços públicos competentes. O cliente deve manter medidas físicas e operacionais apropriadas e não depender exclusivamente da plataforma.',
     ],
   },
   {
@@ -80,15 +82,15 @@ const sections = [
   {
     title: '10. Dados, conteúdo e privacidade',
     paragraphs: [
-      'O cliente mantém seus direitos sobre conteúdos e dados enviados à plataforma e concede ao Vigion autorização limitada para armazenar, processar, transmitir e apresentar essas informações somente na medida necessária para fornecer, proteger e melhorar o serviço.',
-      'O tratamento de dados pessoais segue a Política de Privacidade. O cliente é responsável pelas instruções, bases legais, avisos e solicitações relacionadas às imagens e demais dados cujo tratamento determinar. O Vigion poderá cooperar com pedidos de titulares e autoridades conforme a legislação.',
+      'O cliente mantém seus direitos sobre conteúdos e dados enviados à plataforma e concede ao VigiOn autorização limitada para armazenar, processar, transmitir e apresentar essas informações somente na medida necessária para fornecer, proteger e melhorar o serviço.',
+      'O tratamento de dados pessoais segue a Política de Privacidade. O cliente é responsável pelas instruções, bases legais, avisos e solicitações relacionadas às imagens e demais dados cujo tratamento determinar. O VigiOn poderá cooperar com pedidos de titulares e autoridades conforme a legislação.',
     ],
   },
   {
     title: '11. Propriedade intelectual',
     paragraphs: [
-      'A plataforma, marca, código, interface, documentação e demais componentes do Vigion pertencem aos seus respectivos titulares e são protegidos pela legislação aplicável. Estes Termos concedem apenas uma licença limitada, revogável, não exclusiva e intransferível para utilizar o serviço durante a vigência da conta ou assinatura.',
-      'Sugestões enviadas voluntariamente podem ser utilizadas para aprimorar o produto sem transferir ao Vigion os direitos sobre conteúdos privados do cliente.',
+      'A plataforma, marca, código, interface, documentação e demais componentes do VigiOn pertencem aos seus respectivos titulares e são protegidos pela legislação aplicável. Estes Termos concedem apenas uma licença limitada, revogável, não exclusiva e intransferível para utilizar o serviço durante a vigência da conta ou assinatura.',
+      'Sugestões enviadas voluntariamente podem ser utilizadas para aprimorar o produto sem transferir ao VigiOn os direitos sobre conteúdos privados do cliente.',
     ],
   },
   {
@@ -101,7 +103,7 @@ const sections = [
   {
     title: '13. Responsabilidades e limitação',
     paragraphs: [
-      'Cada parte responde pelos danos diretos que comprovadamente causar em violação à lei ou a estes Termos, observados os limites permitidos pela legislação. O Vigion não responde por instalação inadequada, equipamentos e redes do cliente, atos de usuários autorizados, uso ilegal, indisponibilidade de terceiros ou eventos inevitáveis fora de seu controle.',
+      'Cada parte responde pelos danos diretos que comprovadamente causar em violação à lei ou a estes Termos, observados os limites permitidos pela legislação. O VigiOn não responde por instalação inadequada, equipamentos e redes do cliente, atos de usuários autorizados, uso ilegal, indisponibilidade de terceiros ou eventos inevitáveis fora de seu controle.',
       'Na máxima extensão permitida, não respondemos por lucros cessantes, perda indireta, expectativa de prevenção de evento, falha de equipamento externo ou decisão tomada exclusivamente com base em alerta automatizado. Nada nestes Termos exclui responsabilidade que não possa ser legalmente limitada, nem direitos obrigatórios do consumidor.',
     ],
   },
@@ -124,8 +126,8 @@ export function TermsOfServicePage() {
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800 px-5 py-5 sm:px-8">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
-          <a href="/" className="text-xl font-bold tracking-tight">
-            Vigi<span className="text-emerald-400">On</span>
+          <a href="/">
+            <BrandName className="text-xl" />
           </a>
           <div className="flex items-center gap-2 text-sm">
             <a
@@ -152,7 +154,7 @@ export function TermsOfServicePage() {
           <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">Termos de Serviço</h1>
           <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-300">
             Estes Termos apresentam as condições para criar uma conta, contratar planos e utilizar
-            os recursos de monitoramento do Vigion Cloud.
+            os recursos de monitoramento do VigiOn Cloud.
           </p>
           <p className="mt-5 text-sm text-slate-500">Última atualização: {updatedAt}</p>
         </div>
@@ -179,7 +181,7 @@ export function TermsOfServicePage() {
 
         <article className="space-y-10">
           <section className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-6 text-sm leading-6 text-amber-100">
-            O Vigion é uma ferramenta de monitoramento e não substitui serviços de emergência,
+            O VigiOn é uma ferramenta de monitoramento e não substitui serviços de emergência,
             vigilância presencial ou medidas físicas de segurança.
           </section>
           {sections.map((section) => (
@@ -216,7 +218,7 @@ export function TermsOfServicePage() {
 
       <footer className="border-t border-slate-800 px-5 py-8 text-sm text-slate-500 sm:px-8">
         <div className="mx-auto flex max-w-5xl flex-wrap justify-between gap-3">
-          <span>© {new Date().getFullYear()} Vigion Cloud</span>
+          <span>© {new Date().getFullYear()} <BrandName cloud /></span>
           <div className="flex gap-5">
             <a href="/privacidade">Privacidade</a>
             <a href="/suporte">Suporte</a>

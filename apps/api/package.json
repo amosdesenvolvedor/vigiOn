@@ -23,6 +23,7 @@
     "helmet": "8.0.0",
     "jsonwebtoken": "9.0.2",
     "minio": "8.0.7",
+    "openid-client": "^5.7.1",
     "stripe": "^22.5.0",
     "web-push": "^3.6.7",
     "zod": "3.23.8"

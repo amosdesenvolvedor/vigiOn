@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { BrandName } from '../branding/BrandName';
 import { apiRequest } from '../auth/api';
 
 interface InstallPromptEvent extends Event {
@@ -114,7 +115,7 @@ export function MobileExperience() {
         id="mobile-app"
         className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 text-sm"
       >
-        <strong className="mr-auto">Aplicativo Vigion</strong>
+        <strong className="mr-auto">Aplicativo <BrandName /></strong>
         {install && (
           <button
             className="min-h-11 rounded-lg border border-emerald-700 px-4"

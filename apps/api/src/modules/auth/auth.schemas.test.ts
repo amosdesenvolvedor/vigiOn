@@ -20,4 +20,20 @@ describe('registration validation', () => {
       registerSchema.safeParse({ ...valid, password: 'weak', passwordConfirmation: 'weak' })
         .success,
     ).toBe(false));
+  it('accepts an eight-character password that meets every requirement', () =>
+    expect(
+      registerSchema.safeParse({
+        ...valid,
+        password: 'Aa1!aaaa',
+        passwordConfirmation: 'Aa1!aaaa',
+      }).success,
+    ).toBe(true));
+  it('rejects a password shorter than eight characters', () =>
+    expect(
+      registerSchema.safeParse({
+        ...valid,
+        password: 'Aa1!aaa',
+        passwordConfirmation: 'Aa1!aaa',
+      }).success,
+    ).toBe(false));
 });

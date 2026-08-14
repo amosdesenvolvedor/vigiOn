@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '../auth/api';
 import { StreamPlayer } from '../cameras/StreamPlayer';
 import { useRealtime } from '../realtime/useRealtime';
+import { BrandName } from '../branding/BrandName';
 type Camera = {
   id: string;
   name: string;
@@ -93,7 +94,7 @@ export function MonitoringDashboard() {
       <div className="flex flex-wrap justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-            Central VigiOn
+            Central <BrandName className="text-xs" />
           </p>
           <h2 className="text-2xl font-bold">Visão operacional</h2>
         </div>

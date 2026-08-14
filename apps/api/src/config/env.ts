@@ -62,6 +62,15 @@ const envSchema = z.object({
   STRIPE_PRICE_BUSINESS: optionalSecret(5),
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
   BILLING_RECONCILE_INTERVAL_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
+  GOOGLE_AUTH_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  GOOGLE_CLIENT_ID: optionalSecret(3),
+  GOOGLE_CLIENT_SECRET: optionalSecret(8),
+  GOOGLE_REDIRECT_URI: z.preprocess((value) => (value === '' ? undefined : value), z.string().url().optional()),
+  MICROSOFT_AUTH_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  MICROSOFT_CLIENT_ID: optionalSecret(3),
+  MICROSOFT_CLIENT_SECRET: optionalSecret(8),
+  MICROSOFT_TENANT_ID: z.string().trim().min(1).max(128).default('common'),
+  MICROSOFT_REDIRECT_URI: z.preprocess((value) => (value === '' ? undefined : value), z.string().url().optional()),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -88,6 +97,16 @@ if (parsed.success && parsed.data.BILLING_ENABLED) {
 }
 if (parsed.success && parsed.data.NODE_ENV === 'production' && !parsed.data.MFA_ENCRYPTION_KEY) {
   throw new Error('MFA_ENCRYPTION_KEY is required in production');
+}
+if (parsed.success) {
+  const providers = [
+    ['GOOGLE', parsed.data.GOOGLE_AUTH_ENABLED, parsed.data.GOOGLE_CLIENT_ID, parsed.data.GOOGLE_CLIENT_SECRET, parsed.data.GOOGLE_REDIRECT_URI],
+    ['MICROSOFT', parsed.data.MICROSOFT_AUTH_ENABLED, parsed.data.MICROSOFT_CLIENT_ID, parsed.data.MICROSOFT_CLIENT_SECRET, parsed.data.MICROSOFT_REDIRECT_URI],
+  ] as const;
+  for (const [provider, enabled, clientId, clientSecret, redirectUri] of providers) {
+    if (enabled && (!clientId || !clientSecret || !redirectUri))
+      throw new Error(`${provider} OAuth configuration is incomplete`);
+  }
 }
 if (!parsed.success) {
   console.error('Invalid environment configuration', parsed.error.flatten().fieldErrors);
