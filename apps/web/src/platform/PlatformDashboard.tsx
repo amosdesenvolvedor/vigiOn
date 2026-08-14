@@ -54,6 +54,67 @@ const summaryLabels: Record<string, string> = {
   storageUsedBytes: 'Storage usado (bytes)',
 };
 
+const fieldLabels: Record<string, string> = {
+  id: 'Identificador', name: 'Nome', email: 'E-mail', slug: 'Endereço interno', status: 'Status',
+  role: 'Função', platformRole: 'Acesso global', timezone: 'Fuso horário', createdAt: 'Criado em',
+  updatedAt: 'Atualizado em', lastLoginAt: 'Último acesso', lastSeenAt: 'Última comunicação',
+  currentPeriodStart: 'Início do período', currentPeriodEnd: 'Fim do período', trialEndsAt: 'Fim do trial',
+  cancelAtPeriodEnd: 'Cancela ao fim do período', amountCents: 'Valor', currency: 'Moeda',
+  provider: 'Provedor', billingProvider: 'Provedor', paymentMethod: 'Forma de pagamento',
+  plan: 'Plano', subscriptions: 'Assinatura', storageUsage: 'Armazenamento', _count: 'Recursos',
+  users: 'Usuários', cameras: 'Câmeras', gateways: 'Gateways', fileCount: 'Arquivos',
+  usedBytes: 'Espaço utilizado', reservedBytes: 'Espaço reservado', maxCameras: 'Limite de câmeras',
+  maxUsers: 'Limite de usuários', maxStorageBytes: 'Limite de armazenamento', retentionDays: 'Retenção',
+  enabledFeatures: 'Recursos habilitados', organization: 'Organização', type: 'Tipo', action: 'Ação',
+  severity: 'Severidade', riskLevel: 'Nível de risco', eventType: 'Tipo do evento',
+};
+const statusLabels: Record<string, string> = {
+  ACTIVE: 'Ativa', TRIALING: 'Em avaliação', CANCELED: 'Cancelada', PAST_DUE: 'Pagamento pendente',
+  PAID: 'Pago', PENDING: 'Pendente', FAILED: 'Falhou', OPEN: 'Aberta', CLOSED: 'Fechada',
+  HEALTHY: 'Saudável', RUNNING: 'Executando', SUSPENDED: 'Suspensa', ONLINE: 'Online',
+  OFFLINE: 'Offline', ENABLED: 'Habilitado', DISABLED: 'Desabilitado', PROCESSED: 'Processado',
+};
+const featureLabels: Record<string, string> = {
+  LIVE_VIEW: 'Visualização ao vivo', CLOUD_STORAGE: 'Armazenamento em nuvem', RECORDING: 'Gravação',
+  MOTION_DETECTION: 'Detecção de movimento', PERSON_DETECTION: 'Detecção de pessoas',
+  SMART_ALERTS: 'Alertas inteligentes', MULTI_USER: 'Múltiplos usuários', ADVANCED_EVENTS: 'Eventos avançados',
+};
+const label = (key: string) => fieldLabels[key] ?? key.replace(/([a-z])([A-Z])/g, '$1 $2');
+const bytes = (value: unknown) => {
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount)) return String(value ?? '—');
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = amount; let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit += 1; }
+  return `${size.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${units[unit]}`;
+};
+const isDate = (key: string, value: unknown) =>
+  (key.endsWith('At') || key.endsWith('Date') || key.includes('Period')) && typeof value === 'string' && !Number.isNaN(Date.parse(value));
+const isByteField = (key: string) => /bytes/i.test(key);
+const isStatusField = (key: string) => /status|state/i.test(key);
+
+function FriendlyValue({ field, value }: { field: string; value: unknown }) {
+  if (value === null || value === undefined || value === '') return <span className="text-slate-500">Não informado</span>;
+  if (typeof value === 'boolean') return <span>{value ? 'Sim' : 'Não'}</span>;
+  if (isDate(field, value)) return <span>{new Date(value as string).toLocaleString('pt-BR')}</span>;
+  if (isByteField(field)) return <span>{bytes(value)}</span>;
+  if (field === 'amountCents' && typeof value === 'number') return <span>{(value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>;
+  if (isStatusField(field) && typeof value === 'string') return <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${['ACTIVE','PAID','HEALTHY','ONLINE','PROCESSED'].includes(value) ? 'bg-emerald-950 text-emerald-300' : ['FAILED','PAST_DUE','OFFLINE','SUSPENDED'].includes(value) ? 'bg-rose-950 text-rose-300' : 'bg-slate-800 text-slate-300'}`}>{statusLabels[value] ?? value}</span>;
+  if (Array.isArray(value)) {
+    if (!value.length) return <span className="text-slate-500">Nenhum</span>;
+    if (value.every((entry) => typeof entry === 'string')) return <div className="flex flex-wrap gap-1">{value.map((entry) => <span key={entry as string} className="rounded bg-slate-800 px-2 py-1 text-xs">{featureLabels[entry as string] ?? entry as string}</span>)}</div>;
+    return <div className="grid gap-2">{value.map((entry, index) => <div key={index} className="rounded border border-slate-800 p-2"><FriendlyObject value={entry as Record<string, unknown>} compact /></div>)}</div>;
+  }
+  if (typeof value === 'object') return <FriendlyObject value={value as Record<string, unknown>} compact />;
+  return <span className="break-words">{statusLabels[String(value)] ?? String(value)}</span>;
+}
+
+function FriendlyObject({ value, compact = false }: { value: Record<string, unknown>; compact?: boolean }) {
+  return <dl className={`grid gap-x-5 gap-y-3 ${compact ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
+    {Object.entries(value).filter(([, entry]) => entry !== undefined).map(([key, entry]) => <div key={key} className={typeof entry === 'object' && entry !== null ? 'sm:col-span-2' : ''}><dt className="text-xs font-medium text-slate-500">{label(key)}</dt><dd className="mt-1 text-sm text-slate-200"><FriendlyValue field={key} value={entry} /></dd></div>)}
+  </dl>;
+}
+
 export function PlatformDashboard({ logout }: { logout(): Promise<void> }) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [section, setSection] = useState<Section>('organizations');
@@ -166,9 +227,7 @@ export function PlatformDashboard({ logout }: { logout(): Promise<void> }) {
                   Fechar
                 </button>
               </div>
-              <pre className="mt-3 overflow-x-auto whitespace-pre-wrap text-sm text-slate-300">
-                {JSON.stringify(organizationDetail, null, 2)}
-              </pre>
+              <div className="mt-4"><FriendlyObject value={organizationDetail} /></div>
             </article>
           )}
           {data?.items && (
@@ -178,21 +237,7 @@ export function PlatformDashboard({ logout }: { logout(): Promise<void> }) {
                   key={String(item.id ?? index)}
                   className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950 p-4"
                 >
-                  <dl className="grid min-w-[36rem] grid-cols-2 gap-x-5 gap-y-2 text-sm md:grid-cols-4">
-                    {Object.entries(item)
-                      .filter(([key]) => !['metadata', 'message'].includes(key))
-                      .slice(0, 12)
-                      .map(([key, value]) => (
-                        <div key={key}>
-                          <dt className="text-xs text-slate-500">{key}</dt>
-                          <dd className="break-words">
-                            {typeof value === 'object'
-                              ? JSON.stringify(value)
-                              : String(value ?? '—')}
-                          </dd>
-                        </div>
-                      ))}
-                  </dl>
+                  <FriendlyObject value={Object.fromEntries(Object.entries(item).filter(([key]) => !['metadata', 'message'].includes(key)).slice(0, 12))} />
                   {section === 'organizations' && typeof item.id === 'string' && (
                     <button
                       className="mt-4 min-h-11 rounded border border-emerald-700 px-3 text-sm text-emerald-300"
@@ -206,9 +251,7 @@ export function PlatformDashboard({ logout }: { logout(): Promise<void> }) {
             </div>
           )}
           {data && !data.items && (
-            <pre className="mt-4 overflow-x-auto whitespace-pre-wrap rounded bg-slate-950 p-4 text-sm text-slate-300">
-              {JSON.stringify(data, null, 2)}
-            </pre>
+            <div className="mt-4 rounded bg-slate-950 p-4"><FriendlyObject value={data} /></div>
           )}
           {data?.pagination && (
             <p className="mt-4 text-xs text-slate-500">
