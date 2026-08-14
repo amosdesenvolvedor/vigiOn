@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@vigioni/shared": "0.1.0",
+    "@zxing/browser": "^0.1.5",
     "hls.js": "^1.6.17",
     "qrcode": "^1.5.4",
     "react": "18.3.1",

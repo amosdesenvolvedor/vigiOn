@@ -3,6 +3,7 @@ import { apiRequest } from '../auth/api';
 import { useAuth } from '../auth/AuthContext';
 import { StreamPlayer } from './StreamPlayer';
 import { MediaPanel } from './MediaPanel';
+import { CameraQrScanner, type CameraQrData } from './CameraQrScanner';
 
 type Camera = {
   id: string;
@@ -51,6 +52,7 @@ export function CameraPanel() {
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [showForm, setShowForm] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showQrScanner, setShowQrScanner] = useState(false);
   const [editing, setEditing] = useState<Camera | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [message, setMessage] = useState('');
@@ -93,6 +95,14 @@ export function CameraPanel() {
     });
     setShowForm(true);
   };
+  const applyQrData = useCallback((data: CameraQrData) => {
+    setForm((current) => ({
+      ...current,
+      ...Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined && value !== '')),
+    }));
+    setShowQrScanner(false);
+    setMessage('QR Code lido. Confira os dados antes de cadastrar a câmera.');
+  }, []);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const base = {
@@ -313,13 +323,24 @@ export function CameraPanel() {
             onSubmit={submit}
             className="mx-auto my-6 max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6"
           >
-            <div className="flex justify-between">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <h2 className="text-xl font-bold">
                 {editing ? 'Configurar câmera' : 'Adicionar câmera'}
               </h2>
-              <button type="button" onClick={() => setShowForm(false)}>
-                Fechar
-              </button>
+              <div className="flex items-center gap-3">
+                {!editing && (
+                  <button
+                    type="button"
+                    onClick={() => setShowQrScanner(true)}
+                    className="rounded-lg border border-emerald-500/60 px-3 py-2 text-sm font-semibold text-emerald-300"
+                  >
+                    Escanear QR Code
+                  </button>
+                )}
+                <button type="button" onClick={() => setShowForm(false)}>
+                  Fechar
+                </button>
+              </div>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <label className="sm:col-span-2 text-sm">
@@ -486,6 +507,9 @@ export function CameraPanel() {
             </button>
           </form>
         </div>
+      )}
+      {showQrScanner && (
+        <CameraQrScanner onRead={applyQrData} onClose={() => setShowQrScanner(false)} />
       )}
       {viewing && (
         <StreamPlayer
