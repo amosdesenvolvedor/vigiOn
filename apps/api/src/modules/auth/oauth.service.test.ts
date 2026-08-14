@@ -191,7 +191,7 @@ describe('OAuth/OIDC protocol security', () => {
 describe('external identity account-takeover prevention', () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it('never links an unbound provider identity to an existing matching email', async () => {
+  it('never links an unbound Microsoft identity to an existing matching email', async () => {
     const prisma = {
       externalIdentity: { findUnique: vi.fn(async () => null) },
       user: { findUnique: vi.fn(async () => ({ id: 'existing-user' })) },
@@ -205,8 +205,8 @@ describe('external identity account-takeover prevention', () => {
       auth.loginWithExternalIdentity(
         'transaction-id',
         {
-          provider: 'GOOGLE',
-          subject: 'new-google-subject',
+          provider: 'MICROSOFT',
+          subject: 'new-microsoft-subject',
           email: 'existing@example.test',
           emailVerified: true,
           displayName: 'Existing User',
@@ -214,6 +214,49 @@ describe('external identity account-takeover prevention', () => {
         metadata,
       ),
     ).rejects.toMatchObject({ code: 'OAUTH_LINK_REQUIRED' });
+  });
+
+  it('links a verified Google identity to a verified account and preserves MFA', async () => {
+    const createIdentity = vi.fn(async () => ({ id: 'external-id' }));
+    const updateTransaction = vi.fn(async () => ({}));
+    const prisma = {
+      externalIdentity: { findUnique: vi.fn(async () => null), create: createIdentity },
+      user: {
+        findUnique: vi.fn(async () => ({
+          id: 'existing-user',
+          emailVerifiedAt: new Date(),
+          status: 'ACTIVE',
+          deletedAt: null,
+          memberships: [{ id: 'membership-id', organizationId: 'organization-id', role: 'OWNER' }],
+        })),
+      },
+      mfaCredential: { findUnique: vi.fn(async () => ({ enabledAt: new Date() })) },
+      oAuthTransaction: { update: updateTransaction },
+    } as unknown as PrismaClient;
+    const auth = new AuthService(prisma, {
+      async sendPasswordReset() {},
+      async sendEmailVerification() {},
+      async sendOrganizationInvitation() {},
+    });
+    await expect(
+      auth.loginWithExternalIdentity(
+        'transaction-id',
+        {
+          provider: 'GOOGLE',
+          subject: 'google-subject',
+          email: 'existing@example.test',
+          emailVerified: true,
+          displayName: 'Existing User',
+        },
+        metadata,
+      ),
+    ).resolves.toMatchObject({ kind: 'MFA', completionToken: expect.any(String) });
+    expect(createIdentity).toHaveBeenCalledWith({
+      data: expect.objectContaining({ userId: 'existing-user', provider: 'GOOGLE' }),
+    });
+    expect(updateTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ completionPurpose: 'MFA' }) }),
+    );
   });
 
   it('requires a verified provider email before onboarding a new account', async () => {

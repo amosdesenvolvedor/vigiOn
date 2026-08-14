@@ -48,6 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    const oauthStep = new URLSearchParams(window.location.search).get('oauth');
+    if (oauthStep === 'onboarding' || oauthStep === 'mfa') {
+      setAccessToken(null);
+      setLoading(false);
+      return;
+    }
     apiRequest<{ session: { accessToken: string } }>('/auth/refresh', { method: 'POST' })
       .then(async ({ session }) => {
         setAccessToken(session.accessToken);

@@ -306,15 +306,72 @@ export class AuthService {
       return { kind: 'SESSION', user, membership, tokens };
     }
 
-    const email = normalizeEmail(identity.email);
-    if (await this.prisma.user.findUnique({ where: { normalizedEmail: email } }))
-      throw new AuthError(
-        409,
-        'OAUTH_LINK_REQUIRED',
-        'Sign in with your password before linking this provider',
-      );
     if (!identity.emailVerified)
       throw new AuthError(400, 'OAUTH_EMAIL_UNVERIFIED', 'Provider email is not verified');
+
+    const email = normalizeEmail(identity.email);
+    const matchingUser = await this.prisma.user.findUnique({
+      where: { normalizedEmail: email },
+      include: {
+        memberships: {
+          where: { status: 'ACTIVE', organization: { status: 'ACTIVE', deletedAt: null } },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+        },
+      },
+    });
+    if (matchingUser) {
+      if (identity.provider !== 'GOOGLE' || !matchingUser.emailVerifiedAt)
+        throw new AuthError(
+          409,
+          'OAUTH_LINK_REQUIRED',
+          'Sign in with your password before linking this provider',
+        );
+      const membership = matchingUser.memberships[0];
+      if (matchingUser.status !== 'ACTIVE' || matchingUser.deletedAt || !membership)
+        throw new AuthError(403, 'OAUTH_ACCOUNT_UNAVAILABLE', 'Account is unavailable');
+      const linked = await this.prisma.externalIdentity.create({
+        data: {
+          userId: matchingUser.id,
+          provider: identity.provider,
+          providerSubject: identity.subject,
+          email: identity.email,
+          emailVerified: true,
+        },
+      });
+      const mfa = await this.mfa.status(matchingUser.id);
+      if (mfa.enrolled) {
+        const completionToken = createOpaqueToken();
+        await this.prisma.oAuthTransaction.update({
+          where: { id: transactionId },
+          data: {
+            completionPurpose: 'MFA',
+            completionTokenHash: hashOpaqueToken(completionToken),
+            providerSubject: identity.subject,
+            email: identity.email,
+            emailVerified: true,
+            displayName: identity.displayName,
+          },
+        });
+        return { kind: 'MFA', completionToken };
+      }
+      const tokens = await this.issueSession(matchingUser, membership, metadata);
+      await this.prisma.$transaction([
+        this.prisma.user.update({ where: { id: matchingUser.id }, data: { lastLoginAt: new Date() } }),
+        this.prisma.auditLog.create({
+          data: {
+            organizationId: membership.organizationId,
+            actorUserId: matchingUser.id,
+            action: 'OAUTH_IDENTITY_LINKED',
+            entityType: 'ExternalIdentity',
+            entityId: linked.id,
+            metadata: { provider: identity.provider, method: 'verified_email' },
+            ...metadata,
+          },
+        }),
+      ]);
+      return { kind: 'SESSION', user: matchingUser, membership, tokens };
+    }
 
     const completionToken = createOpaqueToken();
     await this.prisma.oAuthTransaction.update({
