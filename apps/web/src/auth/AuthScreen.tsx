@@ -2,6 +2,7 @@ import { useEffect, useState, type ChangeEventHandler, type FormEvent } from 're
 import { ApiError, apiRequest, apiUrl, setAccessToken } from './api';
 import { useAuth } from './AuthContext';
 import { BrandName } from '../branding/BrandName';
+import { IosInstallHint } from '../mobile/MobileExperience';
 
 type View = 'login' | 'register' | 'forgot' | 'reset' | 'oauth-onboarding' | 'oauth-mfa';
 
@@ -18,6 +19,11 @@ const oauthErrorMessages: Record<string, string> = {
   OAUTH_UNAVAILABLE: 'O login social está temporariamente indisponível.',
 };
 
+const authErrorMessages: Record<string, string> = {
+  ACCOUNT_EXISTS:
+    'Já existe uma conta com este e-mail. Entre com sua senha ou use “Continuar com Google” se foi assim que você criou a conta.',
+};
+
 const validationMessages: Record<string, string> = {
   'Password must contain at least 8 characters': 'A senha deve ter pelo menos 8 caracteres.',
   'Password must include a lowercase letter': 'Inclua pelo menos uma letra minúscula.',
@@ -31,6 +37,8 @@ const validationMessages: Record<string, string> = {
 function friendlyError(reason: unknown) {
   if (!(reason instanceof ApiError))
     return reason instanceof Error ? reason.message : 'Erro inesperado';
+  const authMessage = reason.code ? authErrorMessages[reason.code] : undefined;
+  if (authMessage) return authMessage;
   if (reason.code !== 'VALIDATION_ERROR' || !reason.fields) return reason.message;
   const messages = Object.entries(reason.fields).flatMap(([field, errors]) =>
     (errors ?? []).map(
@@ -77,6 +85,18 @@ export function AuthScreen() {
   const [providers, setProviders] = useState({ google: false, microsoft: false });
   const [oauthBusy, setOauthBusy] = useState<'google' | 'microsoft' | null>(null);
   const { login, register } = useAuth();
+
+  useEffect(() => {
+    if (!oauthStep && !oauthError) return;
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('oauth');
+    cleanUrl.searchParams.delete('oauthError');
+    window.history.replaceState(
+      {},
+      '',
+      `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`,
+    );
+  }, [oauthError, oauthStep]);
 
   const changeView = (nextView: View) => {
     setView(nextView);
@@ -244,9 +264,10 @@ export function AuthScreen() {
         </div>
         <p className="text-sm">Segurança multi-tenant desde a fundação.</p>
       </section>
-      <section className="flex items-center justify-center px-6 py-12">
+      <section className="flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
         <div className="w-full max-w-md">
           <p className="mb-8 lg:hidden"><BrandName className="text-2xl" /></p>
+          <IosInstallHint compact />
           <h2 className="text-3xl font-bold">
             {view === 'login'
               ? 'Acesse sua conta'

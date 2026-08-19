@@ -73,7 +73,18 @@ export const cameraListSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   administrativeStatus: z.enum(['ACTIVE', 'DISABLED']).optional(),
-  connectionStatus: z.enum(['UNKNOWN', 'CONNECTING', 'ONLINE', 'OFFLINE', 'ERROR']).optional(),
+  connectionStatus: z
+    .enum([
+      'UNKNOWN',
+      'CONNECTING',
+      'ONLINE',
+      'DEGRADED',
+      'OFFLINE',
+      'AUTHENTICATION_ERROR',
+      'UNSUPPORTED',
+      'ERROR',
+    ])
+    .optional(),
   connectionType: z.enum(['WIFI', 'ETHERNET', 'OTHER']).optional(),
   protocol: z.enum(['RTSP', 'ONVIF', 'HTTP', 'HTTPS', 'OTHER']).optional(),
   location: z.string().trim().min(1).max(255).optional(),

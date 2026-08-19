@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type {
   CameraAdministrativeStatus,
   CameraConnectionStatus,
@@ -9,6 +10,7 @@ import type {
 import { AuthError } from '../auth/auth.errors';
 import type { RequestMetadata } from '../auth/auth.types';
 import { EntitlementService } from '../billing/entitlement.service';
+import { encryptRegistrationCredentials } from '../streams/stream-envelope';
 import type { TenantContext } from '../tenancy/tenant-context';
 import { CameraCredentialService } from './camera-credential.service';
 
@@ -65,6 +67,10 @@ const cameraSelect = {
   model: true,
   identifier: true,
   lastSeenAt: true,
+  lastHealthCheckAt: true,
+  lastSuccessfulHealthCheckAt: true,
+  consecutiveFailures: true,
+  healthFailureCode: true,
   motionEnabled: true,
   motionSensitivity: true,
   motionSampleFps: true,
@@ -225,7 +231,13 @@ export class CameraService {
     return this.prisma.$transaction(async (tx) => {
       const camera = await tx.camera.update({
         where: { id },
-        data: { administrativeStatus: status },
+        data: {
+          administrativeStatus: status,
+          connectionStatus: 'UNKNOWN',
+          healthGeneration: { increment: 1 },
+          consecutiveFailures: 0,
+          healthFailureCode: null,
+        },
         select: cameraSelect,
       });
       await tx.auditLog.create({
@@ -238,6 +250,18 @@ export class CameraService {
           ...metadata,
         },
       });
+      if (status === 'DISABLED' && camera.gatewayId)
+        await tx.gatewayCommand.create({
+          data: {
+            organizationId: context.organizationId,
+            gatewayId: camera.gatewayId,
+            cameraId: camera.id,
+            commandId: randomUUID(),
+            type: 'CAMERA_UNREGISTER',
+            payload: { cameraId: camera.id, protocolVersion: '1' },
+            expiresAt: new Date(Date.now() + 24 * 60 * 60_000),
+          },
+        });
       return camera;
     });
   }
@@ -305,9 +329,48 @@ export class CameraService {
     },
     metadata: RequestMetadata,
   ) {
-    await this.get(context, id);
     await this.prisma.$transaction(async (tx) => {
+      const camera = await tx.camera.findFirst({
+        where: {
+          id,
+          organizationId: context.organizationId,
+          administrativeStatus: 'ACTIVE',
+          deletedAt: null,
+        },
+        include: { gateway: true },
+      });
+      if (!camera) throw notFound();
       await this.credentials.store(tx, context.organizationId, id, input);
+      await tx.camera.update({
+        where: { id },
+        data: {
+          connectionStatus: 'CONNECTING',
+          healthGeneration: { increment: 1 },
+          consecutiveFailures: 0,
+          healthFailureCode: null,
+        },
+      });
+      if (camera.gatewayId && camera.gateway?.encryptionPublicKey) {
+        const encryptedCredentials = encryptRegistrationCredentials(
+          camera.gateway.encryptionPublicKey,
+          input,
+        );
+        await tx.gatewayCommand.create({
+          data: {
+            organizationId: context.organizationId,
+            gatewayId: camera.gatewayId,
+            cameraId: id,
+            commandId: randomUUID(),
+            type: 'CAMERA_REGISTER',
+            payload: {
+              cameraId: id,
+              protocolVersion: '1',
+              encryptedCredentials: { ...encryptedCredentials },
+            },
+            expiresAt: new Date(Date.now() + 24 * 60 * 60_000),
+          },
+        });
+      }
       await tx.auditLog.create({
         data: {
           organizationId: context.organizationId,
@@ -323,11 +386,28 @@ export class CameraService {
 
   async remove(context: TenantContext, id: string, metadata: RequestMetadata) {
     await this.prisma.$transaction(async (tx) => {
+      const camera = await tx.camera.findFirst({
+        where: { id, organizationId: context.organizationId, deletedAt: null },
+        select: { id: true, gatewayId: true },
+      });
+      if (!camera) throw notFound();
       const result = await tx.camera.updateMany({
         where: { id, organizationId: context.organizationId, deletedAt: null },
         data: { deletedAt: new Date(), administrativeStatus: 'DISABLED' },
       });
       if (!result.count) throw notFound();
+      if (camera.gatewayId)
+        await tx.gatewayCommand.create({
+          data: {
+            organizationId: context.organizationId,
+            gatewayId: camera.gatewayId,
+            cameraId: camera.id,
+            commandId: crypto.randomUUID(),
+            type: 'CAMERA_UNREGISTER',
+            payload: { cameraId: camera.id, protocolVersion: '1' },
+            expiresAt: new Date(Date.now() + 24 * 60 * 60_000),
+          },
+        });
       await tx.resourceCounter.updateMany({
         where: { organizationId: context.organizationId, cameraCount: { gt: 0 } },
         data: { cameraCount: { decrement: 1 }, version: { increment: 1 } },

@@ -8,7 +8,11 @@ import {
   type ConnectionTestResult,
 } from './connectors/camera-connector';
 import { LocalQueue } from './local-queue';
-import { decryptStreamSource, type EncryptedStreamSource } from './stream-envelope';
+import {
+  decryptStreamSource,
+  decryptVerificationCredentials,
+  type EncryptedStreamSource,
+} from './stream-envelope';
 import { StreamManager } from './stream-manager';
 import { CaptureManager } from './capture-manager';
 import {
@@ -16,6 +20,16 @@ import {
   type MonitoringConfiguration,
   type EdgeEvent,
 } from './motion-monitor';
+import { WsDiscovery, type OnvifCandidate } from './ws-discovery';
+import { verifyCamera } from './camera-verifier';
+import { CameraRegistrationRegistry } from './camera-registration';
+import {
+  CameraHealthManager,
+  type HealthConfiguration,
+  type HealthResult,
+} from './camera-health-manager';
+
+const GATEWAY_VERSION = '0.4.0';
 
 const cloudUrl = process.env.VIGION_CLOUD_URL ?? 'https://vigion.cloud';
 if (process.env.NODE_ENV === 'production' && !cloudUrl.startsWith('https://'))
@@ -27,6 +41,24 @@ const eventQueue = new LocalQueue(
   Number(process.env.VIGION_EVENT_QUEUE_LIMIT ?? 1000),
   Number(process.env.VIGION_EVENT_TTL_SECONDS ?? 86_400) * 1000,
 );
+const discoveryQueue = new LocalQueue(
+  process.env.VIGION_DISCOVERY_QUEUE ?? './gateway-discovery.json',
+  200,
+  3_600_000,
+);
+const verificationQueue = new LocalQueue(
+  process.env.VIGION_VERIFICATION_QUEUE ?? './gateway-verification.json',
+  100,
+  3_600_000,
+);
+const healthQueue = new LocalQueue(
+  process.env.VIGION_HEALTH_QUEUE ?? './gateway-camera-health.json',
+  2_000,
+  86_400_000,
+);
+const discovery = new WsDiscovery();
+const verificationControllers = new Map<string, AbortController>();
+const cameraRegistrations = new CameraRegistrationRegistry();
 const connectors = new ConnectorRegistry();
 connectors.register(new RtspConnector());
 connectors.register(new PreparedConnector('ONVIF'));
@@ -88,7 +120,7 @@ const claim = async (): Promise<Config> => {
     body: JSON.stringify({
       pairingCode,
       name: process.env.VIGION_GATEWAY_NAME ?? 'Gateway principal',
-      version: '0.1.0',
+      version: GATEWAY_VERSION,
       protocolVersion: '1',
       encryptionPublicKey: keys.encryptionPublicKey,
     }),
@@ -144,6 +176,7 @@ const processCommands = async (
   config: Config,
   streams: StreamManager,
   captures: CaptureManager,
+  health: CameraHealthManager,
 ) => {
   const { commands } = await request<{
     commands: Array<{ commandId: string; type: string; payload: unknown }>;
@@ -209,6 +242,113 @@ const processCommands = async (
     } else if (command.type === 'STOP_RECORDING') {
       const payload = command.payload as { assetId: string };
       status = await captures.stopRecording(payload.assetId);
+    } else if (command.type === 'CAMERA_DISCOVERY_START') {
+      const payload = command.payload as {
+        sessionId: string;
+        timeoutSeconds: number;
+        protocolVersion: '1';
+      };
+      const report = (reportStatus: string, candidates: OnvifCandidate[] = []) =>
+        discoveryQueue.enqueue({
+          messageId: randomUUID(),
+          commandId: command.commandId,
+          sessionId: payload.sessionId,
+          protocolVersion: '1',
+          status: reportStatus,
+          candidates,
+        });
+      await report('SCANNING');
+      void discovery
+        .start(payload.sessionId, payload.timeoutSeconds, (items) => report('RESULTS', items))
+        .then((items) => report('COMPLETED', items))
+        .catch(() => report('FAILED'));
+      status = 'SUCCESS';
+    } else if (command.type === 'CAMERA_DISCOVERY_CANCEL') {
+      const payload = command.payload as { sessionId: string };
+      discovery.cancel(payload.sessionId);
+      await discoveryQueue.enqueue({
+        messageId: randomUUID(),
+        commandId: command.commandId,
+        sessionId: payload.sessionId,
+        protocolVersion: '1',
+        status: 'CANCELED',
+        candidates: [],
+      });
+      status = 'SUCCESS';
+    } else if (command.type === 'CAMERA_VERIFICATION_START') {
+      const payload = command.payload as {
+        verificationSessionId: string;
+        target: { address: string; port: number };
+        encryptedCredentials: EncryptedStreamSource;
+        timeoutSeconds: number;
+      };
+      const controller = new AbortController();
+      verificationControllers.set(payload.verificationSessionId, controller);
+      const timeout = setTimeout(
+        () => controller.abort(),
+        Math.min(payload.timeoutSeconds, 20) * 1000,
+      );
+      let credentials;
+      try {
+        credentials = decryptVerificationCredentials(
+          config.encryptionPrivateKey,
+          payload.encryptedCredentials,
+        );
+      } catch {
+        clearTimeout(timeout);
+        verificationControllers.delete(payload.verificationSessionId);
+        await verificationQueue.enqueue({
+          messageId: randomUUID(),
+          commandId: command.commandId,
+          verificationSessionId: payload.verificationSessionId,
+          protocolVersion: '1',
+          result: 'UNSUPPORTED',
+          evidence: {
+            onvifDeviceInformation: false,
+            onvifCapabilities: false,
+            mediaProfiles: false,
+            streamUriValidated: false,
+            rtspHandshake: false,
+          },
+          errorCode: 'INVALID_CREDENTIAL_ENVELOPE',
+        });
+        status = 'SUCCESS';
+        await queue.enqueue({ messageId: randomUUID(), commandId: command.commandId, status });
+        continue;
+      }
+      void verifyCamera(payload.target, credentials, controller.signal)
+        .then((report) =>
+          verificationQueue.enqueue({
+            messageId: randomUUID(),
+            commandId: command.commandId,
+            verificationSessionId: payload.verificationSessionId,
+            protocolVersion: '1',
+            ...report,
+          }),
+        )
+        .finally(() => {
+          clearTimeout(timeout);
+          verificationControllers.delete(payload.verificationSessionId);
+        });
+      status = 'SUCCESS';
+    } else if (command.type === 'CAMERA_VERIFICATION_CANCEL') {
+      const payload = command.payload as { verificationSessionId: string };
+      verificationControllers.get(payload.verificationSessionId)?.abort();
+      status = 'SUCCESS';
+    } else if (command.type === 'CAMERA_REGISTER') {
+      const payload = command.payload as {
+        cameraId?: string;
+        encryptedCredentials?: EncryptedStreamSource;
+      };
+      status = cameraRegistrations.register(config.encryptionPrivateKey, payload);
+    } else if (command.type === 'CAMERA_HEALTH_CHECK') {
+      const payload = command.payload as { cameraId?: string };
+      if (payload.cameraId) await health.checkNow(payload.cameraId);
+      status = payload.cameraId ? 'SUCCESS' : 'FAILED';
+    } else if (command.type === 'CAMERA_UNREGISTER') {
+      const payload = command.payload as { cameraId?: string };
+      if (payload.cameraId) health.unregister(payload.cameraId);
+      status = payload.cameraId ? 'SUCCESS' : 'FAILED';
     }
     await queue.enqueue({ messageId: randomUUID(), commandId: command.commandId, status });
   }
@@ -233,7 +373,27 @@ const run = async () => {
     (event: EdgeEvent) => eventQueue.enqueue(event),
     (source) => decryptStreamSource(config.encryptionPrivateKey, source),
   );
+  const health = new CameraHealthManager(
+    config.encryptionPrivateKey,
+    (entry: HealthResult) =>
+      healthQueue.enqueue({ messageId: randomUUID(), protocolVersion: '1', entries: [entry] }),
+    undefined,
+    undefined,
+    4,
+    undefined,
+    async (identity) => {
+      if (!identity.endpointReference) return null;
+      const candidates = await discovery.start(`health-${randomUUID()}`, 5, async () => undefined);
+      const exact = candidates.find(
+        (candidate) => candidate.endpointReference === identity.endpointReference,
+      );
+      return exact ? { address: exact.networkAddress, servicePort: exact.servicePort } : null;
+    },
+  );
   const shutdown = () => {
+    discovery.cleanup();
+    health.stop();
+    for (const controller of verificationControllers.values()) controller.abort();
     void Promise.all([streams.cleanup(), captures.cleanup(), monitors.cleanup()]).finally(() =>
       process.exit(0),
     );
@@ -250,7 +410,7 @@ const run = async () => {
           method: 'POST',
           body: JSON.stringify({
             messageId: randomUUID(),
-            version: '0.1.0',
+            version: GATEWAY_VERSION,
             protocolVersion: '1',
             timestamp: new Date().toISOString(),
             uptime: Math.floor((Date.now() - startedAt) / 1000),
@@ -260,7 +420,13 @@ const run = async () => {
         },
         config,
       );
-      await processCommands(config, streams, captures);
+      await processCommands(config, streams, captures, health);
+      const operational = await request<{ cameras: HealthConfiguration[] }>(
+        '/camera-health/sync',
+        { method: 'GET' },
+        config,
+      );
+      health.sync(operational.cameras);
       const monitoring = await request<{ cameras: MonitoringConfiguration[] }>(
         '/monitoring-config',
         { method: 'GET' },
@@ -273,6 +439,15 @@ const run = async () => {
       );
       await eventQueue.flush((payload) =>
         request('/events', { method: 'POST', body: JSON.stringify(payload) }, config),
+      );
+      await discoveryQueue.flush((payload) =>
+        request('/discovery/results', { method: 'POST', body: JSON.stringify(payload) }, config),
+      );
+      await verificationQueue.flush((payload) =>
+        request('/verification/results', { method: 'POST', body: JSON.stringify(payload) }, config),
+      );
+      await healthQueue.flush((payload) =>
+        request('/camera-health/status', { method: 'POST', body: JSON.stringify(payload) }, config),
       );
       failures = 0;
       await new Promise((resolve) => setTimeout(resolve, config.heartbeatIntervalSeconds * 1000));

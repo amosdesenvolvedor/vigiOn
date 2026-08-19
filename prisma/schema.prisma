@@ -71,7 +71,10 @@ enum CameraConnectionStatus {
   UNKNOWN
   CONNECTING
   ONLINE
+  DEGRADED
   OFFLINE
+  AUTHENTICATION_ERROR
+  UNSUPPORTED
   ERROR
 }
 
@@ -87,6 +90,143 @@ enum CameraProtocol {
   HTTP
   HTTPS
   PROPRIETARY
+  OTHER
+}
+
+enum CameraCreationSource {
+  MANUAL
+  ONBOARDING
+  IMPORT
+  API
+}
+
+enum CameraIdentifierType {
+  SERIAL_NUMBER
+  UID
+  DEVICE_ID
+  MAC_ADDRESS
+  ONVIF_ENDPOINT_REFERENCE
+}
+
+enum CatalogCameraType {
+  INDOOR_FIXED
+  INDOOR_PTZ
+  OUTDOOR_FIXED
+  OUTDOOR_PTZ
+  BULLET
+  DOME
+  TURRET
+  FLOODLIGHT
+  DOORBELL
+  BATTERY
+  SOLAR
+  DUAL_LENS
+  PANORAMIC
+  OTHER
+  UNKNOWN
+}
+
+enum CatalogSupportState {
+  SUPPORTED
+  UNSUPPORTED
+  CONDITIONAL
+  UNKNOWN
+}
+
+enum CatalogQrProfileType {
+  NONE
+  VIGION
+  MANUFACTURER_SERIAL
+  MANUFACTURER_UID
+  MANUFACTURER_TOKEN
+  MANUFACTURER_PROPRIETARY
+  UNKNOWN
+}
+
+enum CatalogCapabilityType {
+  VIDEO
+  AUDIO_INPUT
+  AUDIO_OUTPUT
+  TWO_WAY_AUDIO
+  PTZ
+  PAN
+  TILT
+  OPTICAL_ZOOM
+  DIGITAL_ZOOM
+  NIGHT_VISION
+  IR
+  COLOR_NIGHT_VISION
+  MOTION_DETECTION
+  PERSON_DETECTION
+  VEHICLE_DETECTION
+  SOUND_DETECTION
+  SD_CARD
+  SNAPSHOT
+  EVENTS
+  MULTI_STREAM
+  LOCAL_STREAMING
+}
+
+enum CatalogConnectivityType {
+  WIFI_2_4_GHZ
+  WIFI_5_GHZ
+  WIFI_6
+  ETHERNET
+  POE
+  BATTERY
+  CELLULAR
+  OTHER
+}
+
+enum CatalogProtocolType {
+  ONVIF
+  RTSP
+  HTTP
+  HTTPS
+  WEBSOCKET
+  MANUFACTURER_PROPRIETARY
+  PROPRIETARY_P2P
+  CLOUD_ONLY
+}
+
+enum CatalogProvisioningType {
+  VIGION_DIRECT
+  ONVIF_DISCOVERY
+  RTSP_MANUAL
+  MANUFACTURER_QR
+  MANUFACTURER_APP_REQUIRED
+  MANUFACTURER_CLOUD_REQUIRED
+  AP_MODE
+  BLUETOOTH_ASSISTED
+  QR_WIFI
+  PROPRIETARY_P2P
+  MANUAL
+  UNKNOWN
+}
+
+enum CatalogCompatibilityLevel {
+  SUPPORTED
+  PARTIAL
+  EXPERIMENTAL
+  PROPRIETARY_ONLY
+  UNSUPPORTED
+  UNKNOWN
+}
+
+enum CatalogConfidenceLevel {
+  OFFICIAL_CONFIRMED
+  COMMUNITY_CONFIRMED
+  LAB_VERIFIED
+  INFERRED
+  UNVERIFIED
+}
+
+enum CatalogSourceType {
+  MANUFACTURER_DOCUMENTATION
+  MANUFACTURER_SUPPORT
+  COMMUNITY_DOCUMENTATION
+  LAB_REPORT
+  IMPORTED_SPREADSHEET
   OTHER
 }
 
@@ -293,6 +433,68 @@ enum GatewayCommandType {
   CAPTURE_SNAPSHOT
   START_RECORDING
   STOP_RECORDING
+  CAMERA_DISCOVERY_START
+  CAMERA_DISCOVERY_CANCEL
+  CAMERA_VERIFICATION_START
+  CAMERA_VERIFICATION_CANCEL
+  CAMERA_REGISTER
+  CAMERA_HEALTH_CHECK
+  CAMERA_UNREGISTER
+}
+
+enum CameraVerificationStatus {
+  PENDING
+  WAITING_FOR_CREDENTIALS
+  DISPATCHED
+  AUTHENTICATING
+  VERIFYING_ONVIF
+  VERIFYING_MEDIA
+  VERIFYING_RTSP
+  COMPLETED
+  CONSUMED
+  FAILED
+  CANCELED
+  EXPIRED
+}
+
+enum CameraVerificationResult {
+  VERIFIED
+  PARTIALLY_VERIFIED
+  AUTHENTICATION_REQUIRED
+  AUTHENTICATION_FAILED
+  MODEL_MISMATCH
+  ONVIF_UNAVAILABLE
+  RTSP_UNAVAILABLE
+  TIMEOUT
+  NETWORK_ERROR
+  UNSUPPORTED
+  CANCELED
+}
+
+enum CameraDiscoveryStatus {
+  PENDING
+  DISPATCHED
+  SCANNING
+  RESULTS_AVAILABLE
+  COMPLETED
+  EXPIRED
+  CANCELED
+  FAILED
+}
+
+enum CameraCandidateClassification {
+  CAMERA_CANDIDATE
+  POSSIBLE_CAMERA
+  NOT_RELEVANT
+  UNKNOWN
+}
+
+enum DiscoveryMatchConfidence {
+  EXACT
+  HIGH
+  MEDIUM
+  LOW
+  UNKNOWN
 }
 
 enum GatewayCommandStatus {
@@ -314,21 +516,22 @@ enum StreamSessionStatus {
 }
 
 model Organization {
-  id                      String                   @id @default(uuid()) @db.Char(36)
-  name                    String                   @db.VarChar(160)
-  slug                    String                   @unique @db.VarChar(100)
-  status                  OrganizationStatus       @default(ACTIVE)
-  timezone                String                   @default("UTC") @db.VarChar(64)
-  deletedAt               DateTime?                @db.DateTime(3)
-  createdAt               DateTime                 @default(now()) @db.DateTime(3)
-  updatedAt               DateTime                 @updatedAt @db.DateTime(3)
-  stripeCustomerId        String?                  @unique @db.VarChar(191)
+  id                      String                         @id @default(uuid()) @db.Char(36)
+  name                    String                         @db.VarChar(160)
+  slug                    String                         @unique @db.VarChar(100)
+  status                  OrganizationStatus             @default(ACTIVE)
+  timezone                String                         @default("UTC") @db.VarChar(64)
+  deletedAt               DateTime?                      @db.DateTime(3)
+  createdAt               DateTime                       @default(now()) @db.DateTime(3)
+  updatedAt               DateTime                       @updatedAt @db.DateTime(3)
+  stripeCustomerId        String?                        @unique @db.VarChar(191)
   customer                CustomerProfile?
   users                   User[]
   memberships             OrganizationMembership[]
   invitations             OrganizationInvitation[]
   settings                OrganizationSettings?
   cameras                 Camera[]
+  cameraIdentifiers       CameraIdentifier[]
   gateways                Gateway[]
   gatewayPairingCodes     GatewayPairingCode[]
   gatewayCommands         GatewayCommand[]
@@ -353,6 +556,10 @@ model Organization {
   billingCheckoutSessions BillingCheckoutSession[]
   payments                Payment[]
   invoices                Invoice[]
+  discoverySessions       CameraDiscoverySession[]
+  discoveryCandidates     CameraDiscoveryCandidate[]
+  verificationSessions    CameraVerificationSession[]
+  verificationCredentials CameraVerificationCredential[]
 
   @@index([status, deletedAt])
 }
@@ -371,24 +578,24 @@ model CustomerProfile {
 }
 
 model User {
-  id                      String                   @id @default(uuid()) @db.Char(36)
-  organizationId          String                   @db.Char(36)
-  name                    String                   @db.VarChar(160)
-  email                   String                   @db.VarChar(254)
-  normalizedEmail         String                   @unique @db.VarChar(254)
-  passwordHash            String                   @db.VarChar(255)
-  role                    UserRole                 @default(VIEWER)
+  id                      String                      @id @default(uuid()) @db.Char(36)
+  organizationId          String                      @db.Char(36)
+  name                    String                      @db.VarChar(160)
+  email                   String                      @db.VarChar(254)
+  normalizedEmail         String                      @unique @db.VarChar(254)
+  passwordHash            String                      @db.VarChar(255)
+  role                    UserRole                    @default(VIEWER)
   platformRole            PlatformRole?
-  status                  UserStatus               @default(INVITED)
-  timezone                String?                  @db.VarChar(64)
-  lastLoginAt             DateTime?                @db.DateTime(3)
-  emailVerifiedAt         DateTime?                @db.DateTime(3)
-  deletedAt               DateTime?                @db.DateTime(3)
-  createdAt               DateTime                 @default(now()) @db.DateTime(3)
-  updatedAt               DateTime                 @updatedAt @db.DateTime(3)
-  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  status                  UserStatus                  @default(INVITED)
+  timezone                String?                     @db.VarChar(64)
+  lastLoginAt             DateTime?                   @db.DateTime(3)
+  emailVerifiedAt         DateTime?                   @db.DateTime(3)
+  deletedAt               DateTime?                   @db.DateTime(3)
+  createdAt               DateTime                    @default(now()) @db.DateTime(3)
+  updatedAt               DateTime                    @updatedAt @db.DateTime(3)
+  organization            Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   notifications           Notification[]
-  acknowledgedAlerts      Alert[]                  @relation("AlertAcknowledgedBy")
+  acknowledgedAlerts      Alert[]                     @relation("AlertAcknowledgedBy")
   notificationPreferences NotificationPreference[]
   auditLogs               AuditLog[]
   sessions                Session[]
@@ -396,12 +603,14 @@ model User {
   memberships             OrganizationMembership[]
   streamSessions          StreamSession[]
   storageFiles            StorageFile[]
-  sentInvitations         OrganizationInvitation[] @relation("InvitationSender")
+  sentInvitations         OrganizationInvitation[]    @relation("InvitationSender")
   pushSubscriptions       PushSubscription[]
-  platformAuditLogs       PlatformAuditLog[]       @relation("PlatformAuditActor")
+  platformAuditLogs       PlatformAuditLog[]          @relation("PlatformAuditActor")
   mfaCredential           MfaCredential?
   mfaRecoveryCodes        MfaRecoveryCode[]
   externalIdentities      ExternalIdentity[]
+  discoverySessions       CameraDiscoverySession[]
+  verificationSessions    CameraVerificationSession[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, deletedAt])
@@ -573,36 +782,53 @@ model PlatformUser {
 }
 
 model Camera {
-  id                      String                     @id @default(uuid()) @db.Char(36)
-  organizationId          String                     @db.Char(36)
-  gatewayId               String?                    @db.Char(36)
-  name                    String                     @db.VarChar(160)
-  description             String?                    @db.Text
-  location                String?                    @db.VarChar(255)
-  administrativeStatus    CameraAdministrativeStatus @default(ACTIVE)
-  connectionStatus        CameraConnectionStatus     @default(UNKNOWN)
-  connectionType          CameraConnectionType       @default(OTHER)
-  protocol                CameraProtocol
-  manufacturer            String?                    @db.VarChar(100)
-  model                   String?                    @db.VarChar(100)
-  identifier              String?                    @db.VarChar(191)
-  lastSeenAt              DateTime?                  @db.DateTime(3)
-  motionEnabled           Boolean                    @default(false)
-  motionSensitivity       String                     @default("MEDIUM") @db.VarChar(16)
-  motionSampleFps         Int                        @default(2)
-  motionCooldownSeconds   Int                        @default(10)
-  captureSnapshotOnMotion Boolean                    @default(false)
-  deletedAt               DateTime?                  @db.DateTime(3)
-  createdAt               DateTime                   @default(now()) @db.DateTime(3)
-  updatedAt               DateTime                   @updatedAt @db.DateTime(3)
-  organization            Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  gateway                 Gateway?                   @relation(fields: [gatewayId], references: [id], onDelete: SetNull)
-  credential              CameraCredential?
-  events                  CameraEvent[]
-  storageFiles            StorageFile[]
-  streamSessions          StreamSession[]
-  monitoringSchedules     MonitoringSchedule[]
-  cameraZones             CameraZone[]
+  id                          String                     @id @default(uuid()) @db.Char(36)
+  organizationId              String                     @db.Char(36)
+  gatewayId                   String?                    @db.Char(36)
+  catalogVariantId            String?                    @db.Char(36)
+  verificationSessionId       String?                    @unique @db.Char(36)
+  creationSource              CameraCreationSource       @default(MANUAL)
+  detectedCapabilities        Json?
+  capabilityEvidence          Json?
+  name                        String                     @db.VarChar(160)
+  description                 String?                    @db.Text
+  location                    String?                    @db.VarChar(255)
+  administrativeStatus        CameraAdministrativeStatus @default(ACTIVE)
+  connectionStatus            CameraConnectionStatus     @default(UNKNOWN)
+  connectionType              CameraConnectionType       @default(OTHER)
+  protocol                    CameraProtocol
+  manufacturer                String?                    @db.VarChar(100)
+  model                       String?                    @db.VarChar(100)
+  identifier                  String?                    @db.VarChar(191)
+  lastSeenAt                  DateTime?                  @db.DateTime(3)
+  lastHealthCheckAt           DateTime?                  @db.DateTime(3)
+  lastSuccessfulHealthCheckAt DateTime?                  @db.DateTime(3)
+  consecutiveFailures         Int                        @default(0)
+  healthSequence              BigInt                     @default(0)
+  healthGeneration            Int                        @default(1)
+  healthFailureCode           String?                    @db.VarChar(64)
+  healthProfile               Json?
+  currentNetworkAddress       String?                    @db.VarChar(45)
+  currentServicePort          Int?
+  motionEnabled               Boolean                    @default(false)
+  motionSensitivity           String                     @default("MEDIUM") @db.VarChar(16)
+  motionSampleFps             Int                        @default(2)
+  motionCooldownSeconds       Int                        @default(10)
+  captureSnapshotOnMotion     Boolean                    @default(false)
+  deletedAt                   DateTime?                  @db.DateTime(3)
+  createdAt                   DateTime                   @default(now()) @db.DateTime(3)
+  updatedAt                   DateTime                   @updatedAt @db.DateTime(3)
+  organization                Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  gateway                     Gateway?                   @relation(fields: [gatewayId], references: [id], onDelete: SetNull)
+  catalogVariant              CameraCatalogVariant?      @relation(fields: [catalogVariantId], references: [id], onDelete: SetNull)
+  verificationSession         CameraVerificationSession? @relation(fields: [verificationSessionId], references: [id], onDelete: SetNull)
+  credential                  CameraCredential?
+  identifiers                 CameraIdentifier[]
+  events                      CameraEvent[]
+  storageFiles                StorageFile[]
+  streamSessions              StreamSession[]
+  monitoringSchedules         MonitoringSchedule[]
+  cameraZones                 CameraZone[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, identifier])
@@ -610,36 +836,383 @@ model Camera {
   @@index([organizationId, connectionStatus, deletedAt])
   @@index([organizationId, lastSeenAt])
   @@index([organizationId, gatewayId, deletedAt])
+  @@index([catalogVariantId])
+}
+
+model CameraIdentifier {
+  id             String               @id @default(uuid()) @db.Char(36)
+  organizationId String               @db.Char(36)
+  cameraId       String               @db.Char(36)
+  type           CameraIdentifierType
+  valueHash      String               @db.Char(64)
+  createdAt      DateTime             @default(now()) @db.DateTime(3)
+  camera         Camera               @relation(fields: [organizationId, cameraId], references: [organizationId, id], onDelete: Cascade)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, type, valueHash])
+  @@index([organizationId, cameraId])
+}
+
+model CameraCatalogManufacturer {
+  id             String                @id @default(uuid()) @db.Char(36)
+  name           String                @db.VarChar(120)
+  normalizedName String                @unique @db.VarChar(120)
+  notes          String?               @db.Text
+  createdAt      DateTime              @default(now()) @db.DateTime(3)
+  updatedAt      DateTime              @updatedAt @db.DateTime(3)
+  brands         CameraCatalogBrand[]
+  sources        CameraCatalogSource[]
+
+  @@index([name])
+}
+
+model CameraCatalogBrand {
+  id             String                    @id @default(uuid()) @db.Char(36)
+  manufacturerId String                    @db.Char(36)
+  name           String                    @db.VarChar(120)
+  normalizedName String                    @db.VarChar(120)
+  createdAt      DateTime                  @default(now()) @db.DateTime(3)
+  updatedAt      DateTime                  @updatedAt @db.DateTime(3)
+  manufacturer   CameraCatalogManufacturer @relation(fields: [manufacturerId], references: [id], onDelete: Restrict)
+  families       CameraCatalogFamily[]
+  models         CameraCatalogModel[]
+
+  @@unique([manufacturerId, normalizedName])
+  @@index([name])
+}
+
+model CameraCatalogFamily {
+  id             String               @id @default(uuid()) @db.Char(36)
+  brandId        String               @db.Char(36)
+  name           String               @db.VarChar(120)
+  normalizedName String               @db.VarChar(120)
+  createdAt      DateTime             @default(now()) @db.DateTime(3)
+  updatedAt      DateTime             @updatedAt @db.DateTime(3)
+  brand          CameraCatalogBrand   @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  models         CameraCatalogModel[]
+
+  @@unique([brandId, normalizedName])
+  @@index([name])
+}
+
+model CameraCatalogModel {
+  id             String                 @id @default(uuid()) @db.Char(36)
+  brandId        String                 @db.Char(36)
+  familyId       String?                @db.Char(36)
+  name           String                 @db.VarChar(160)
+  normalizedName String                 @db.VarChar(160)
+  aliases        Json?
+  cameraType     CatalogCameraType      @default(UNKNOWN)
+  resolution     String?                @db.VarChar(80)
+  notes          String?                @db.Text
+  createdAt      DateTime               @default(now()) @db.DateTime(3)
+  updatedAt      DateTime               @updatedAt @db.DateTime(3)
+  brand          CameraCatalogBrand     @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  family         CameraCatalogFamily?   @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  variants       CameraCatalogVariant[]
+  sources        CameraCatalogSource[]
+  aliasRecords   CameraCatalogAlias[]
+
+  @@unique([brandId, normalizedName])
+  @@index([name])
+  @@index([familyId, normalizedName])
+  @@index([cameraType])
+}
+
+model CameraCatalogAlias {
+  id             String             @id @default(uuid()) @db.Char(36)
+  modelId        String             @db.Char(36)
+  name           String             @db.VarChar(160)
+  normalizedName String             @db.VarChar(160)
+  model          CameraCatalogModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, normalizedName])
+  @@index([normalizedName])
+}
+
+model CameraCatalogVariant {
+  id                        String                      @id @default(uuid()) @db.Char(36)
+  modelId                   String                      @db.Char(36)
+  identityKey               String                      @unique @db.VarChar(191)
+  name                      String?                     @db.VarChar(120)
+  hardwareVersion           String?                     @db.VarChar(80)
+  region                    String?                     @db.VarChar(40)
+  firmwareMin               String?                     @db.VarChar(80)
+  firmwareMax               String?                     @db.VarChar(80)
+  sku                       String?                     @db.VarChar(100)
+  deviceIdentifierPattern   String?                     @db.VarChar(255)
+  connectivity              Json?
+  qrProfile                 CatalogQrProfileType        @default(UNKNOWN)
+  qrPresent                 CatalogSupportState         @default(UNKNOWN)
+  qrContainsUid             CatalogSupportState         @default(UNKNOWN)
+  qrContainsSerial          CatalogSupportState         @default(UNKNOWN)
+  qrContainsMac             CatalogSupportState         @default(UNKNOWN)
+  qrContainsWifi            CatalogSupportState         @default(UNKNOWN)
+  qrProprietary             CatalogSupportState         @default(UNKNOWN)
+  qrFormat                  String?                     @db.VarChar(160)
+  qrUsableByVigion          CatalogSupportState         @default(UNKNOWN)
+  manufacturerAppRequired   CatalogSupportState         @default(UNKNOWN)
+  manufacturerCloudRequired CatalogSupportState         @default(UNKNOWN)
+  localOperation            CatalogSupportState         @default(UNKNOWN)
+  notes                     String?                     @db.Text
+  createdAt                 DateTime                    @default(now()) @db.DateTime(3)
+  updatedAt                 DateTime                    @updatedAt @db.DateTime(3)
+  model                     CameraCatalogModel          @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  capabilities              CameraCatalogCapability[]
+  protocols                 CameraCatalogProtocol[]
+  provisioningProfiles      CameraCatalogProvisioning[]
+  compatibility             CameraCatalogCompatibility?
+  sources                   CameraCatalogSource[]
+  cameras                   Camera[]
+  discoverySessions         CameraDiscoverySession[]
+  verificationSessions      CameraVerificationSession[]
+
+  @@index([modelId, hardwareVersion, region])
+  @@index([hardwareVersion])
+}
+
+model CameraCatalogCapability {
+  id         String                 @id @default(uuid()) @db.Char(36)
+  variantId  String                 @db.Char(36)
+  capability CatalogCapabilityType
+  support    CatalogSupportState    @default(UNKNOWN)
+  confidence CatalogConfidenceLevel @default(UNVERIFIED)
+  notes      String?                @db.Text
+  createdAt  DateTime               @default(now()) @db.DateTime(3)
+  updatedAt  DateTime               @updatedAt @db.DateTime(3)
+  variant    CameraCatalogVariant   @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, capability])
+  @@index([capability, support])
+}
+
+model CameraCatalogProtocol {
+  id                     String                 @id @default(uuid()) @db.Char(36)
+  variantId              String                 @db.Char(36)
+  protocol               CatalogProtocolType
+  support                CatalogSupportState    @default(UNKNOWN)
+  confidence             CatalogConfidenceLevel @default(UNVERIFIED)
+  defaultPort            Int?
+  portConfigurable       CatalogSupportState    @default(UNKNOWN)
+  mainStreamPath         String?                @db.VarChar(255)
+  secondaryStreamPath    String?                @db.VarChar(255)
+  otherStreams           Json?
+  authenticationRequired CatalogSupportState    @default(UNKNOWN)
+  transport              String?                @db.VarChar(40)
+  onvifProfiles          Json?
+  onvifPtz               CatalogSupportState    @default(UNKNOWN)
+  onvifDiscovery         CatalogSupportState    @default(UNKNOWN)
+  onvifEvents            CatalogSupportState    @default(UNKNOWN)
+  notes                  String?                @db.Text
+  createdAt              DateTime               @default(now()) @db.DateTime(3)
+  updatedAt              DateTime               @updatedAt @db.DateTime(3)
+  variant                CameraCatalogVariant   @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, protocol])
+  @@index([protocol, support])
+}
+
+model CameraCatalogProvisioning {
+  id         String                  @id @default(uuid()) @db.Char(36)
+  variantId  String                  @db.Char(36)
+  type       CatalogProvisioningType
+  support    CatalogSupportState     @default(UNKNOWN)
+  confidence CatalogConfidenceLevel  @default(UNVERIFIED)
+  priority   Int                     @default(100)
+  notes      String?                 @db.Text
+  createdAt  DateTime                @default(now()) @db.DateTime(3)
+  updatedAt  DateTime                @updatedAt @db.DateTime(3)
+  variant    CameraCatalogVariant    @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, type])
+  @@index([type, support])
+}
+
+model CameraCatalogCompatibility {
+  id         String                    @id @default(uuid()) @db.Char(36)
+  variantId  String                    @unique @db.Char(36)
+  level      CatalogCompatibilityLevel @default(UNKNOWN)
+  reason     String?                   @db.Text
+  strategy   String?                   @db.VarChar(255)
+  confidence CatalogConfidenceLevel    @default(UNVERIFIED)
+  createdAt  DateTime                  @default(now()) @db.DateTime(3)
+  updatedAt  DateTime                  @updatedAt @db.DateTime(3)
+  variant    CameraCatalogVariant      @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([level, confidence])
+}
+
+model CameraCatalogSource {
+  id             String                     @id @default(uuid()) @db.Char(36)
+  manufacturerId String?                    @db.Char(36)
+  modelId        String?                    @db.Char(36)
+  variantId      String?                    @db.Char(36)
+  type           CatalogSourceType
+  title          String                     @db.VarChar(255)
+  url            String?                    @db.VarChar(1000)
+  publisher      String?                    @db.VarChar(160)
+  accessedAt     DateTime?                  @db.DateTime(3)
+  notes          String?                    @db.Text
+  fingerprint    String                     @unique @db.Char(64)
+  createdAt      DateTime                   @default(now()) @db.DateTime(3)
+  updatedAt      DateTime                   @updatedAt @db.DateTime(3)
+  manufacturer   CameraCatalogManufacturer? @relation(fields: [manufacturerId], references: [id], onDelete: Cascade)
+  model          CameraCatalogModel?        @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  variant        CameraCatalogVariant?      @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([manufacturerId])
+  @@index([modelId])
+  @@index([variantId])
+  @@index([type])
 }
 
 model Gateway {
-  id                  String               @id @default(uuid()) @db.Char(36)
-  organizationId      String               @db.Char(36)
-  name                String               @db.VarChar(160)
-  deviceId            String               @unique @db.Char(36)
-  secretHash          String               @db.VarChar(255)
-  encryptionPublicKey String?              @db.Text
-  status              GatewayStatus        @default(UNKNOWN)
-  version             String?              @db.VarChar(40)
-  protocolVersion     String               @default("1") @db.VarChar(16)
-  lastSeenAt          DateTime?            @db.DateTime(3)
-  lastUptime          Int?
-  disabledAt          DateTime?            @db.DateTime(3)
-  deletedAt           DateTime?            @db.DateTime(3)
-  createdAt           DateTime             @default(now()) @db.DateTime(3)
-  updatedAt           DateTime             @updatedAt @db.DateTime(3)
-  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  cameras             Camera[]
-  commands            GatewayCommand[]
-  messages            GatewayMessage[]
-  pairingCodes        GatewayPairingCode[]
-  streamSessions      StreamSession[]
-  storageFiles        StorageFile[]
-  events              CameraEvent[]
+  id                   String                      @id @default(uuid()) @db.Char(36)
+  organizationId       String                      @db.Char(36)
+  name                 String                      @db.VarChar(160)
+  deviceId             String                      @unique @db.Char(36)
+  secretHash           String                      @db.VarChar(255)
+  encryptionPublicKey  String?                     @db.Text
+  status               GatewayStatus               @default(UNKNOWN)
+  version              String?                     @db.VarChar(40)
+  protocolVersion      String                      @default("1") @db.VarChar(16)
+  lastSeenAt           DateTime?                   @db.DateTime(3)
+  lastUptime           Int?
+  disabledAt           DateTime?                   @db.DateTime(3)
+  deletedAt            DateTime?                   @db.DateTime(3)
+  createdAt            DateTime                    @default(now()) @db.DateTime(3)
+  updatedAt            DateTime                    @updatedAt @db.DateTime(3)
+  organization         Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  cameras              Camera[]
+  commands             GatewayCommand[]
+  messages             GatewayMessage[]
+  pairingCodes         GatewayPairingCode[]
+  streamSessions       StreamSession[]
+  storageFiles         StorageFile[]
+  events               CameraEvent[]
+  discoverySessions    CameraDiscoverySession[]
+  verificationSessions CameraVerificationSession[]
 
   @@unique([organizationId, id])
   @@index([organizationId, status, deletedAt])
   @@index([organizationId, lastSeenAt])
+}
+
+model CameraDiscoverySession {
+  id                   String                      @id @default(uuid()) @db.Char(36)
+  organizationId       String                      @db.Char(36)
+  gatewayId            String                      @db.Char(36)
+  userId               String                      @db.Char(36)
+  catalogVariantId     String?                     @db.Char(36)
+  expectedManufacturer String?                     @db.VarChar(120)
+  expectedModel        String?                     @db.VarChar(160)
+  expectedVariant      String?                     @db.VarChar(80)
+  expectedIdentifiers  Json?
+  status               CameraDiscoveryStatus       @default(PENDING)
+  confirmedCandidateId String?                     @db.Char(36)
+  startedAt            DateTime?                   @db.DateTime(3)
+  completedAt          DateTime?                   @db.DateTime(3)
+  expiresAt            DateTime                    @db.DateTime(3)
+  errorCode            String?                     @db.VarChar(64)
+  createdAt            DateTime                    @default(now()) @db.DateTime(3)
+  updatedAt            DateTime                    @updatedAt @db.DateTime(3)
+  organization         Organization                @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  gateway              Gateway                     @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
+  user                 User                        @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Restrict)
+  catalogVariant       CameraCatalogVariant?       @relation(fields: [catalogVariantId], references: [id], onDelete: SetNull)
+  candidates           CameraDiscoveryCandidate[]
+  verificationSessions CameraVerificationSession[]
+
+  @@unique([organizationId, id])
+  @@index([organizationId, gatewayId, status])
+  @@index([userId, status, expiresAt])
+  @@index([status, expiresAt])
+}
+
+model CameraDiscoveryCandidate {
+  id                     String                        @id @default(uuid()) @db.Char(36)
+  organizationId         String                        @db.Char(36)
+  sessionId              String                        @db.Char(36)
+  fingerprint            String                        @db.Char(64)
+  networkAddress         String                        @db.VarChar(45)
+  servicePort            Int
+  endpointReference      String?                       @db.VarChar(255)
+  manufacturer           String?                       @db.VarChar(120)
+  model                  String?                       @db.VarChar(160)
+  hardwareInfo           String?                       @db.VarChar(160)
+  classification         CameraCandidateClassification @default(POSSIBLE_CAMERA)
+  confidence             DiscoveryMatchConfidence      @default(UNKNOWN)
+  matchFactors           Json?
+  detectedCapabilities   Json?
+  authenticationRequired Boolean                       @default(false)
+  alreadyRegistered      Boolean                       @default(false)
+  createdAt              DateTime                      @default(now()) @db.DateTime(3)
+  updatedAt              DateTime                      @updatedAt @db.DateTime(3)
+  session                CameraDiscoverySession        @relation(fields: [organizationId, sessionId], references: [organizationId, id], onDelete: Cascade)
+  organization           Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  verificationSessions   CameraVerificationSession[]
+
+  @@unique([sessionId, fingerprint])
+  @@index([organizationId, sessionId, classification])
+}
+
+model CameraVerificationSession {
+  id                       String                        @id @default(uuid()) @db.Char(36)
+  organizationId           String                        @db.Char(36)
+  gatewayId                String                        @db.Char(36)
+  userId                   String                        @db.Char(36)
+  discoverySessionId       String                        @db.Char(36)
+  candidateId              String                        @db.Char(36)
+  catalogVariantId         String?                       @db.Char(36)
+  status                   CameraVerificationStatus      @default(PENDING)
+  result                   CameraVerificationResult?
+  credentialsConfigured    Boolean                       @default(false)
+  detectedIdentity         Json?
+  detectedCapabilities     Json?
+  evidence                 Json?
+  verifiedStream           Json?
+  commandId                String?                       @db.Char(36)
+  completionIdempotencyKey String?                       @db.Char(36)
+  confirmedAt              DateTime?                     @db.DateTime(3)
+  startedAt                DateTime?                     @db.DateTime(3)
+  completedAt              DateTime?                     @db.DateTime(3)
+  consumedAt               DateTime?                     @db.DateTime(3)
+  expiresAt                DateTime                      @db.DateTime(3)
+  errorCode                String?                       @db.VarChar(64)
+  createdAt                DateTime                      @default(now()) @db.DateTime(3)
+  updatedAt                DateTime                      @updatedAt @db.DateTime(3)
+  organization             Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  gateway                  Gateway                       @relation(fields: [organizationId, gatewayId], references: [organizationId, id], onDelete: Restrict)
+  user                     User                          @relation(fields: [organizationId, userId], references: [organizationId, id], onDelete: Restrict)
+  discoverySession         CameraDiscoverySession        @relation(fields: [organizationId, discoverySessionId], references: [organizationId, id], onDelete: Restrict)
+  candidate                CameraDiscoveryCandidate      @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  catalogVariant           CameraCatalogVariant?         @relation(fields: [catalogVariantId], references: [id], onDelete: SetNull)
+  credential               CameraVerificationCredential?
+  camera                   Camera?
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, userId, completionIdempotencyKey])
+  @@index([organizationId, gatewayId, status])
+  @@index([userId, status, expiresAt])
+  @@index([status, expiresAt])
+}
+
+model CameraVerificationCredential {
+  id                    String                    @id @default(uuid()) @db.Char(36)
+  organizationId        String                    @db.Char(36)
+  verificationSessionId String                    @unique @db.Char(36)
+  ciphertext            Bytes                     @db.LongBlob
+  initializationVector  Bytes                     @db.VarBinary(32)
+  authenticationTag     Bytes                     @db.VarBinary(32)
+  keyVersion            Int                       @default(1)
+  expiresAt             DateTime                  @db.DateTime(3)
+  createdAt             DateTime                  @default(now()) @db.DateTime(3)
+  updatedAt             DateTime                  @updatedAt @db.DateTime(3)
+  verificationSession   CameraVerificationSession @relation(fields: [organizationId, verificationSessionId], references: [organizationId, id], onDelete: Cascade)
+  organization          Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, verificationSessionId])
+  @@index([expiresAt])
 }
 
 model GatewayPairingCode {

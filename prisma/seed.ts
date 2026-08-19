@@ -1,4 +1,6 @@
 import { PrismaClient, PlanInterval, PlanStatus } from '@prisma/client';
+import { importCatalogRows } from './catalog-import';
+import { initialCameraCatalogRows } from './catalog-seed-data';
 
 const prisma = new PrismaClient();
 
@@ -85,6 +87,8 @@ async function main() {
       },
     });
   }
+  const catalogReport = await importCatalogRows(prisma, initialCameraCatalogRows);
+  console.info(JSON.stringify({ event: 'camera_catalog.seed', ...catalogReport }));
 }
 
 main()

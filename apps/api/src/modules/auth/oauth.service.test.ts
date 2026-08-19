@@ -58,6 +58,12 @@ function harness(claims: Record<string, unknown> = {}) {
       kind: 'ONBOARDING' as const,
       completionToken: 'completion-token',
     })),
+    completeExternalOnboarding: vi.fn(async () => ({
+      user: { id: 'user-id' },
+      membership: { id: 'membership-id', role: 'OWNER' },
+      tokens: { accessToken: 'access-token', refreshToken: 'refresh-token', expiresIn: 900 },
+      returnTo: '/',
+    })),
   } as unknown as AuthService;
   const service = new OAuthService(prisma, auth, async () => client, enabledConfig);
   return {
@@ -125,7 +131,7 @@ describe('OAuth/OIDC protocol security', () => {
       const url = await h.service.begin(provider, '/');
       const state = new URL(url).searchParams.get('state')!;
       await expect(h.service.callback(provider, callbackRequest(state), metadata)).resolves.toMatchObject({
-        kind: 'ONBOARDING',
+        kind: 'SESSION',
       });
       expect(h.callback).toHaveBeenCalledWith(
         expect.any(String),
@@ -137,8 +143,37 @@ describe('OAuth/OIDC protocol security', () => {
           response_type: 'code',
         }),
       );
+      expect(h.auth.completeExternalOnboarding).toHaveBeenCalledWith(
+        'completion-token',
+        {
+          name: 'Social User',
+          organizationName: 'Example',
+          timezone: 'UTC',
+        },
+        metadata,
+      );
     },
   );
+
+  it('uses the Google profile name and a personal organization name for Gmail accounts', async () => {
+    const h = harness({
+      sub: 'google-subject',
+      email: 'person@gmail.com',
+      email_verified: true,
+      name: 'Pessoa Google',
+    });
+    const state = new URL(await h.service.begin('GOOGLE', '/')).searchParams.get('state')!;
+    await h.service.callback('GOOGLE', callbackRequest(state), metadata);
+    expect(h.auth.completeExternalOnboarding).toHaveBeenCalledWith(
+      'completion-token',
+      {
+        name: 'Pessoa Google',
+        organizationName: 'Organização de Pessoa Google',
+        timezone: 'UTC',
+      },
+      metadata,
+    );
+  });
 
   it('rejects missing, invalid, expired, and reused state', async () => {
     const h = harness({ sub: 'subject', email: 'user@example.test', email_verified: true });

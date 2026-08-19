@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc -b --pretty false",
-    "lint": "eslint src --max-warnings=0"
+    "lint": "eslint src --max-warnings=0",
+    "test": "vitest run"
   },
   "dependencies": {
     "@vigioni/shared": "0.1.0",
@@ -29,9 +30,10 @@
     "eslint": "8.57.1",
     "eslint-plugin-react-hooks": "5.0.0",
     "eslint-plugin-react-refresh": "0.4.14",
-    "postcss": "8.4.49",
+    "postcss": "^8.5.26",
     "tailwindcss": "3.4.15",
     "typescript": "5.6.3",
-    "vite": "5.4.11"
+    "vite": "^5.4.21",
+    "vitest": "^3.2.6"
   }
 }

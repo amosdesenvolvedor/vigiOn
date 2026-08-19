@@ -20,7 +20,13 @@
     "prisma:validate": "prisma validate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
-    "test": "npm run test -w @vigioni/api && npm run test -w @vigioni/gateway",
+    "catalog:parse": "python3 scripts/parse-camera-catalog-xlsx.py",
+    "catalog:import": "tsx scripts/import-camera-catalog.ts",
+    "test": "npm run test -w @vigioni/api && npm run test -w @vigioni/gateway && npm run test -w @vigioni/web && npm run test:importer",
+    "test:importer": "vitest run prisma/catalog-import.test.ts",
+    "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait test-db",
+    "test:db:down": "docker compose -f docker-compose.test.yml down -v",
+    "test:integration": "node scripts/assert-test-database.mjs && prisma migrate deploy && npm test",
     "platform-admin": "node scripts/platform-admin.mjs"
   },
   "engines": {

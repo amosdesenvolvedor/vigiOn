@@ -77,6 +77,29 @@ export class EntitlementService {
     return this.reserveCount(organizationId, 'CAMERAS');
   }
 
+  async reserveCameraInTransaction(tx: Prisma.TransactionClient, organizationId: string) {
+    const { plan } = await this.getEntitlementsWith(tx, organizationId);
+    await tx.resourceCounter.upsert({
+      where: { organizationId },
+      create: {
+        organizationId,
+        cameraCount: await tx.camera.count({ where: { organizationId, deletedAt: null } }),
+        memberCount: await tx.organizationMembership.count({
+          where: { organizationId, status: { not: 'REMOVED' } },
+        }),
+      },
+      update: {},
+    });
+    const result = await tx.resourceCounter.updateMany({
+      where: { organizationId, cameraCount: { lt: plan.maxCameras } },
+      data: { cameraCount: { increment: 1 }, version: { increment: 1 } },
+    });
+    if (!result.count) {
+      const counter = await tx.resourceCounter.findUniqueOrThrow({ where: { organizationId } });
+      throw new PlanLimitError('CAMERAS', counter.cameraCount, plan.maxCameras);
+    }
+  }
+
   reserveMember(organizationId: string) {
     return this.reserveCount(organizationId, 'USERS');
   }

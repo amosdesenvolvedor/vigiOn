@@ -12,6 +12,8 @@ import {
   updateCameraSchema,
 } from './camera.schemas';
 import { CameraService } from './camera.service';
+import { cameraHealthService } from '../camera-health/camera-health.routes';
+import rateLimit from 'express-rate-limit';
 
 export const cameraRouter = Router();
 const service = new CameraService(prisma);
@@ -55,6 +57,27 @@ cameraRouter.get('/:id', requirePermission('cameras:view'), async (request, resp
     next(error);
   }
 });
+
+cameraRouter.post(
+  '/:id/health-check',
+  requirePermission('cameras:manage'),
+  rateLimit({ windowMs: 60_000, max: 5, standardHeaders: true, legacyHeaders: false }),
+  async (request, response, next) => {
+    try {
+      response
+        .status(202)
+        .json(
+          await cameraHealthService.requestRetry(
+            request.auth!,
+            cameraId(request),
+            metadata(request),
+          ),
+        );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 cameraRouter.patch('/:id', requirePermission('cameras:manage'), async (request, response, next) => {
   try {

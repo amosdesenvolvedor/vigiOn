@@ -6,7 +6,7 @@ import {
   hkdfSync,
 } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { encryptForGateway } from './stream-envelope';
+import { encryptForGateway, encryptVerificationCredentials } from './stream-envelope';
 
 describe('stream source envelope', () => {
   it('encrypts recoverable camera credentials only for the gateway X25519 key', () => {
@@ -45,5 +45,25 @@ describe('stream source envelope', () => {
     expect(() => encryptForGateway(wrong, { secret: true })).toThrowError(
       expect.objectContaining({ code: 'GATEWAY_ENCRYPTION_UNAVAILABLE' }),
     );
+  });
+
+  it('uses an isolated context and never exposes verification credentials', () => {
+    const gateway = generateKeyPairSync('x25519');
+    const envelope = encryptVerificationCredentials(
+      gateway.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+      { username: 'admin', password: 'camera-secret' },
+    );
+    expect(JSON.stringify(envelope)).not.toContain('camera-secret');
+    const shared = diffieHellman({ privateKey: gateway.privateKey,
+      publicKey: createPublicKey(envelope.ephemeralPublicKey) });
+    const key = Buffer.from(hkdfSync('sha256', shared, Buffer.alloc(0),
+      'vigioni-camera-verification-v1', 32));
+    const decipher = createDecipheriv('aes-256-gcm', key,
+      Buffer.from(envelope.initializationVector, 'base64url'));
+    decipher.setAAD(Buffer.from('vigioni-camera-credentials-v1'));
+    decipher.setAuthTag(Buffer.from(envelope.authenticationTag, 'base64url'));
+    expect(JSON.parse(Buffer.concat([
+      decipher.update(Buffer.from(envelope.ciphertext, 'base64url')), decipher.final(),
+    ]).toString('utf8'))).toEqual({ username: 'admin', password: 'camera-secret' });
   });
 });

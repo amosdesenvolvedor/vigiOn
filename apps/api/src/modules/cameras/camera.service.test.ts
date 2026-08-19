@@ -1,8 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CameraCredentialService } from './camera-credential.service';
 import { CameraService } from './camera.service';
+import { CameraHealthService } from '../camera-health/camera-health.service';
 
 const prisma = new PrismaClient();
 const suffix = randomUUID().slice(0, 8);
@@ -73,9 +74,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await prisma.cameraEvent.deleteMany({ where: { organizationId: { in: organizationIds } } });
+  await prisma.gatewayCommand.deleteMany({ where: { organizationId: { in: organizationIds } } });
+  await prisma.gatewayMessage.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.limitEvent.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.auditLog.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.camera.deleteMany({ where: { organizationId: { in: organizationIds } } });
+  await prisma.gateway.deleteMany({ where: { organizationId: { in: organizationIds } } });
   await prisma.subscriptionHistory.deleteMany({
     where: { organizationId: { in: organizationIds } },
   });
@@ -144,6 +149,83 @@ describe('camera management and tenant isolation', () => {
     await expect(
       new CameraCredentialService().retrieveForBackend(current.organization.id, camera.id),
     ).resolves.toEqual({ username: 'device-admin', password: 'SuperSecret!123' });
+  });
+
+  it('replaces rejected credentials, re-registers and returns to ONLINE', async () => {
+    const current = await tenant('credential-recovery');
+    const keys = generateKeyPairSync('x25519');
+    const gateway = await prisma.gateway.create({
+      data: {
+        organizationId: current.organization.id,
+        name: 'Recovery Gateway',
+        deviceId: randomUUID(),
+        secretHash: 'test',
+        status: 'ONLINE',
+        version: '0.4.0',
+        encryptionPublicKey: keys.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+      },
+    });
+    const camera = await service.create(
+      current.context,
+      {
+        name: 'Recovery Camera',
+        connectionType: 'WIFI',
+        protocol: 'RTSP',
+        credentials: {
+          username: 'admin',
+          password: 'old-camera-password',
+          stream: { host: '192.168.1.10', port: 554, path: '/stream', transport: 'tcp' },
+        },
+      },
+      metadata,
+    );
+    await prisma.camera.update({
+      where: { id: camera.id },
+      data: { gatewayId: gateway.id, connectionStatus: 'AUTHENTICATION_ERROR' },
+    });
+    await service.updateCredentials(
+      current.context,
+      camera.id,
+      {
+        username: 'admin',
+        password: 'new-camera-password',
+        stream: { host: '192.168.1.10', port: 554, path: '/stream', transport: 'tcp' },
+      },
+      metadata,
+    );
+    expect(
+      await new CameraCredentialService().retrieveForBackend(current.organization.id, camera.id),
+    ).toMatchObject({ password: 'new-camera-password' });
+    const updated = await prisma.camera.findUniqueOrThrow({ where: { id: camera.id } });
+    expect(updated).toMatchObject({ connectionStatus: 'CONNECTING', healthGeneration: 2 });
+    const command = await prisma.gatewayCommand.findFirstOrThrow({
+      where: { cameraId: camera.id, type: 'CAMERA_REGISTER' },
+    });
+    expect(JSON.stringify(command.payload)).not.toContain('new-camera-password');
+    const auth = {
+      organizationId: current.organization.id,
+      gatewayId: gateway.id,
+      deviceId: gateway.deviceId,
+    };
+    await new CameraHealthService(prisma).ingest(auth, {
+      messageId: randomUUID(),
+      protocolVersion: '1',
+      entries: [
+        {
+          cameraId: camera.id,
+          generation: 2,
+          sequence: 1,
+          observedAt: new Date().toISOString(),
+          status: 'ONLINE',
+          checks: { onvif: 'OK', rtsp: 'OK' },
+          consecutiveFailures: 0,
+        },
+      ],
+    });
+    expect(await prisma.camera.findUniqueOrThrow({ where: { id: camera.id } })).toMatchObject({
+      connectionStatus: 'ONLINE',
+      lastSeenAt: expect.any(Date),
+    });
   });
 
   it('paginates, filters and searches only in the current tenant', async () => {

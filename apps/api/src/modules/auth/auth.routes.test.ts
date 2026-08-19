@@ -54,6 +54,14 @@ describe('authentication HTTP security', () => {
     expect((await request(createApp()).post('/api/v1/cameras').send({})).status).toBe(401);
   });
 
+  it('rejects unauthenticated camera discovery', async () => {
+    const response = await request(createApp()).post('/api/v1/camera-onboarding/discovery').send({
+      gatewayId: randomUUID(),
+      expectedModel: 'C200',
+    });
+    expect(response.status).toBe(401);
+  });
+
   it('returns an access token but never password, refresh token, or token hashes', async () => {
     const response = await request(createApp())
       .post('/api/v1/auth/login')

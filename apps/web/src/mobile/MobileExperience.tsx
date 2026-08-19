@@ -13,6 +13,56 @@ const toBytes = (value: string) => {
   return Uint8Array.from(raw, (character) => character.charCodeAt(0));
 };
 
+const isIosDevice = () =>
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+const isStandalone = () =>
+  window.matchMedia('(display-mode: standalone)').matches ||
+  Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+
+export function IosInstallHint({ compact = false }: { compact?: boolean }) {
+  const [dismissed, setDismissed] = useState(
+    () => window.sessionStorage.getItem('vigion:ios-install-hint') === 'dismissed',
+  );
+  if (!isIosDevice() || isStandalone() || dismissed) return null;
+
+  const dismiss = () => {
+    window.sessionStorage.setItem('vigion:ios-install-hint', 'dismissed');
+    setDismissed(true);
+  };
+
+  return (
+    <aside
+      aria-label="Instalar VigiOn no iPhone"
+      className={`${compact ? 'mb-5' : 'mb-6'} rounded-xl border border-emerald-800 bg-emerald-950/70 p-4 text-sm text-emerald-50`}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-400 text-xl font-bold text-slate-950"
+        >
+          ⇧
+        </span>
+        <div className="min-w-0 flex-1">
+          <strong className="block">Instale o VigiOn no iPhone</strong>
+          <p className="mt-1 leading-relaxed text-emerald-100">
+            No Safari, toque em Compartilhar e depois em “Adicionar à Tela de Início”.
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label="Fechar instrução de instalação"
+          onClick={dismiss}
+          className="min-h-11 min-w-11 rounded-lg text-xl text-emerald-200 hover:bg-emerald-900"
+        >
+          ×
+        </button>
+      </div>
+    </aside>
+  );
+}
+
 export function MobileExperience() {
   const [online, setOnline] = useState(navigator.onLine);
   const [install, setInstall] = useState<InstallPromptEvent | null>(null);
@@ -103,6 +153,7 @@ export function MobileExperience() {
 
   return (
     <>
+      <IosInstallHint />
       {!online && (
         <div
           role="status"

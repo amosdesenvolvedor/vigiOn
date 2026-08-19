@@ -102,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setOrganization(null);
       setMfa(null);
+      window.history.replaceState({}, '', '/');
     }
   };
 

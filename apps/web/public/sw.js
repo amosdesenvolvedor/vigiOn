@@ -1,10 +1,13 @@
-const CACHE = 'vigion-shell-v2';
+const CACHE = 'vigion-shell-v4';
 const SHELL = [
   '/',
   '/monitoring',
   '/manifest.webmanifest',
   '/icons/vigion-192.png',
   '/icons/vigion-512.png',
+  '/icons/apple-touch-icon.png',
+  '/icons/vigion-maskable-192.png',
+  '/icons/vigion-maskable-512.png',
 ];
 
 self.addEventListener('install', (event) => {

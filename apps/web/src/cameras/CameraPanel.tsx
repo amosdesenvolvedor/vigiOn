@@ -4,6 +4,8 @@ import { useAuth } from '../auth/AuthContext';
 import { StreamPlayer } from './StreamPlayer';
 import { MediaPanel } from './MediaPanel';
 import { CameraQrScanner, type CameraQrData } from './CameraQrScanner';
+import { cameraCatalog } from './cameraCatalog';
+import { CameraDiscovery } from './CameraDiscovery';
 
 type Camera = {
   id: string;
@@ -12,7 +14,17 @@ type Camera = {
   description: string | null;
   location: string | null;
   administrativeStatus: 'ACTIVE' | 'DISABLED';
-  connectionStatus: 'UNKNOWN' | 'CONNECTING' | 'ONLINE' | 'OFFLINE' | 'ERROR';
+  connectionStatus:
+    | 'UNKNOWN'
+    | 'CONNECTING'
+    | 'ONLINE'
+    | 'DEGRADED'
+    | 'OFFLINE'
+    | 'AUTHENTICATION_ERROR'
+    | 'UNSUPPORTED'
+    | 'ERROR';
+  lastHealthCheckAt?: string | null;
+  healthFailureCode?: string | null;
   connectionType: 'WIFI' | 'ETHERNET' | 'OTHER';
   protocol: 'RTSP' | 'ONVIF' | 'HTTP' | 'HTTPS' | 'OTHER';
   manufacturer: string | null;
@@ -53,6 +65,8 @@ export function CameraPanel() {
   const [showForm, setShowForm] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
+  const [showDiscovery, setShowDiscovery] = useState(false);
+  const [catalogIndex, setCatalogIndex] = useState('');
   const [editing, setEditing] = useState<Camera | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [message, setMessage] = useState('');
@@ -60,6 +74,17 @@ export function CameraPanel() {
   const [mediaCamera, setMediaCamera] = useState<Camera | null>(null);
   const [motionCamera, setMotionCamera] = useState<Camera | null>(null);
   const canManage = user?.role === 'OWNER' || user?.role === 'ADMIN';
+
+  const retryHealth = async (camera: Camera) => {
+    setMessage('Solicitando nova verificação…');
+    await apiRequest(`/cameras/${camera.id}/health-check`, { method: 'POST' });
+    setItems((current) =>
+      current.map((item) =>
+        item.id === camera.id ? { ...item, connectionStatus: 'CONNECTING' } : item,
+      ),
+    );
+    setMessage('Verificação solicitada ao Gateway.');
+  };
 
   const load = useCallback(async () => {
     const params = new URLSearchParams({ limit: '50', sortBy: 'name', sortOrder: 'asc' });
@@ -78,7 +103,23 @@ export function CameraPanel() {
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm);
+    setCatalogIndex('');
     setShowForm(true);
+  };
+  const selectCatalog = (value: string) => {
+    setCatalogIndex(value);
+    if (!value) return;
+    const profile = cameraCatalog[Number(value)];
+    if (!profile) return;
+    setForm((current) => ({
+      ...current,
+      manufacturer: profile.manufacturer,
+      model: '',
+      connectionType: 'WIFI',
+      ...(profile.protocol ? { protocol: profile.protocol } : {}),
+      ...(profile.port ? { streamPort: profile.port } : {}),
+      ...(profile.path ? { streamPath: profile.path } : {}),
+    }));
   };
   const openEdit = (camera: Camera) => {
     setEditing(camera);
@@ -98,10 +139,14 @@ export function CameraPanel() {
   const applyQrData = useCallback((data: CameraQrData) => {
     setForm((current) => ({
       ...current,
-      ...Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined && value !== '')),
+      ...Object.fromEntries(
+        Object.entries(data).filter(([, value]) => value !== undefined && value !== ''),
+      ),
     }));
     setShowQrScanner(false);
-    setMessage('QR Code lido. Confira os dados antes de cadastrar a câmera.');
+    setMessage(
+      'Identificação confirmada. Confira e complete os dados antes de cadastrar a câmera.',
+    );
   }, []);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -271,12 +316,33 @@ export function CameraPanel() {
               </span>
             </div>
             <div className="mt-5 rounded-lg bg-slate-900 p-4 text-center text-sm text-slate-400">
-              <p className="font-medium text-slate-300">Aguardando conexão</p>
+              <p className="font-medium text-slate-300">
+                {camera.connectionStatus === 'ONLINE'
+                  ? 'Câmera operacional'
+                  : camera.connectionStatus === 'DEGRADED'
+                    ? 'Conexão degradada'
+                    : camera.connectionStatus === 'AUTHENTICATION_ERROR'
+                      ? 'Credenciais rejeitadas'
+                      : camera.connectionStatus === 'UNSUPPORTED'
+                        ? 'Health não suportado'
+                        : camera.connectionStatus === 'OFFLINE'
+                          ? 'Câmera offline'
+                          : 'Estado não confirmado'}
+              </p>
               <p className="mt-1">Conectividade: {camera.connectionStatus}</p>
               <p>
                 Última comunicação:{' '}
                 {camera.lastSeenAt ? new Date(camera.lastSeenAt).toLocaleString('pt-BR') : 'nunca'}
               </p>
+              <p>
+                Última verificação:{' '}
+                {camera.lastHealthCheckAt
+                  ? new Date(camera.lastHealthCheckAt).toLocaleString('pt-BR')
+                  : 'ainda não realizada'}
+              </p>
+              {camera.connectionStatus === 'AUTHENTICATION_ERROR' && (
+                <p className="mt-2 text-amber-300">Atualize usuário e senha em Configurar.</p>
+              )}
             </div>
             <p className="mt-4 text-xs text-slate-500">
               {camera.protocol} · {camera.connectionType}
@@ -293,6 +359,16 @@ export function CameraPanel() {
               <button onClick={() => setMediaCamera(camera)} className="text-violet-300">
                 Arquivos
               </button>
+              {canManage && camera.administrativeStatus === 'ACTIVE' && camera.gatewayId && (
+                <button
+                  onClick={() =>
+                    void retryHealth(camera).catch((error: Error) => setMessage(error.message))
+                  }
+                  className="text-amber-300"
+                >
+                  Verificar novamente
+                </button>
+              )}
               {canManage && (
                 <>
                   <button onClick={() => openEdit(camera)} className="text-emerald-300">
@@ -337,12 +413,48 @@ export function CameraPanel() {
                     Escanear QR Code
                   </button>
                 )}
+                {!editing && (form.manufacturer || form.model) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDiscovery(true)}
+                    className="rounded-lg border border-sky-500/60 px-3 py-2 text-sm font-semibold text-sky-300"
+                  >
+                    Procurar na rede
+                  </button>
+                )}
                 <button type="button" onClick={() => setShowForm(false)}>
                   Fechar
                 </button>
               </div>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              {!editing && (
+                <div className="sm:col-span-2 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4">
+                  <label className="text-sm font-semibold text-emerald-200">
+                    Perfil da câmera
+                    <select
+                      value={catalogIndex}
+                      onChange={(event) => selectCatalog(event.target.value)}
+                      className="mt-2 w-full rounded border border-slate-700 bg-slate-950 p-3 text-slate-100"
+                    >
+                      <option value="">Selecione a marca/ecossistema</option>
+                      {cameraCatalog.map((profile, index) => (
+                        <option key={`${profile.ecosystem}-${index}`} value={index}>
+                          {profile.ecosystem} · confiança {profile.confidence}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {catalogIndex !== '' && cameraCatalog[Number(catalogIndex)] && (
+                    <div className="mt-3 text-sm text-slate-300">
+                      <p>{cameraCatalog[Number(catalogIndex)]?.onboarding}</p>
+                      <p className="mt-2 text-amber-300">
+                        {cameraCatalog[Number(catalogIndex)]?.warning}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
               <label className="sm:col-span-2 text-sm">
                 Nome *
                 <input
@@ -391,11 +503,24 @@ export function CameraPanel() {
               </label>
               <label className="text-sm">
                 Modelo
-                <input
-                  value={form.model}
-                  onChange={(event) => setForm({ ...form, model: event.target.value })}
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
-                />
+                {catalogIndex !== '' ? (
+                  <select
+                    value={form.model}
+                    onChange={(event) => setForm({ ...form, model: event.target.value })}
+                    className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                  >
+                    <option value="">Selecione o modelo</option>
+                    {cameraCatalog[Number(catalogIndex)]?.models.map((model) => (
+                      <option key={model}>{model}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={form.model}
+                    onChange={(event) => setForm({ ...form, model: event.target.value })}
+                    className="mt-1 w-full rounded border border-slate-700 bg-slate-950 p-3"
+                  />
+                )}
               </label>
               <label className="text-sm">
                 Conexão
@@ -510,6 +635,19 @@ export function CameraPanel() {
       )}
       {showQrScanner && (
         <CameraQrScanner onRead={applyQrData} onClose={() => setShowQrScanner(false)} />
+      )}
+      {showDiscovery && (
+        <CameraDiscovery
+          manufacturer={form.manufacturer}
+          model={form.model}
+          onClose={() => setShowDiscovery(false)}
+          onConfirm={() => {
+            setShowDiscovery(false);
+            setShowForm(false);
+            setMessage(`Câmera adicionada com sucesso. Aguardando comunicação do Gateway.`);
+            void load();
+          }}
+        />
       )}
       {viewing && (
         <StreamPlayer

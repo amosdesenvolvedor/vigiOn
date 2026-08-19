@@ -25,6 +25,18 @@ import { dashboardRouter } from './modules/dashboard/dashboard.routes';
 import { platformRouter } from './modules/platform/platform.routes';
 import { stripeWebhookRouter, paymentRouter } from './modules/billing/payment.routes';
 import { requestContext } from './lib/logger';
+import { cameraCatalogRouter } from './modules/camera-catalog/camera-catalog.routes';
+import { cameraOnboardingRouter } from './modules/camera-onboarding/qr-analysis.routes';
+import {
+  discoveryRouter,
+  gatewayDiscoveryRouter,
+} from './modules/camera-onboarding/discovery.routes';
+import {
+  gatewayVerificationRouter,
+  verificationRouter,
+} from './modules/camera-onboarding/verification.routes';
+import { completionRouter } from './modules/camera-onboarding/completion.routes';
+import { gatewayCameraHealthRouter } from './modules/camera-health/camera-health.routes';
 
 export const createApp = () => {
   const app = express();
@@ -32,7 +44,14 @@ export const createApp = () => {
   app.disable('x-powered-by');
   if (env.NODE_ENV === 'production') app.set('trust proxy', 1);
   app.use(helmet());
-  app.use(cors({ origin: [env.WEB_ORIGIN], credentials: true, methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'], allowedHeaders: ['authorization', 'content-type', 'x-request-id'] }));
+  app.use(
+    cors({
+      origin: [env.WEB_ORIGIN],
+      credentials: true,
+      methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+      allowedHeaders: ['authorization', 'content-type', 'x-request-id'],
+    }),
+  );
   app.use(requestContext);
   app.use(
     '/api/v1/webhooks',
@@ -49,10 +68,18 @@ export const createApp = () => {
   app.use('/api/v1/subscription', subscriptionRouter);
   app.use('/api/v1/billing', paymentRouter);
   app.use('/api/v1/cameras', cameraRouter);
+  app.use('/api/v1/camera-catalog', cameraCatalogRouter);
+  app.use('/api/v1/camera-onboarding/discovery', discoveryRouter);
+  app.use('/api/v1/camera-onboarding/verification', verificationRouter);
+  app.use('/api/v1/camera-onboarding/complete', completionRouter);
+  app.use('/api/v1/camera-onboarding', cameraOnboardingRouter);
   app.use('/api/v1/gateways', gatewayRouter);
   app.use('/api/v1/gateway-agent/stream-media', streamMediaRouter);
   app.use('/api/v1/gateway-agent/media-assets', mediaUploadRouter);
   app.use('/api/v1/gateway-agent/events', gatewayEventRouter);
+  app.use('/api/v1/gateway-agent/discovery', gatewayDiscoveryRouter);
+  app.use('/api/v1/gateway-agent/verification', gatewayVerificationRouter);
+  app.use('/api/v1/gateway-agent/camera-health', gatewayCameraHealthRouter);
   app.use('/api/v1/gateway-agent', gatewayAgentRouter);
   app.use('/api/v1/events', eventRouter);
   app.use('/api/v1/alerts', alertRouter);

@@ -10,6 +10,17 @@ import type { RequestMetadata } from './auth.types';
 
 const transactionTtlMs = 10 * 60_000;
 const allowedReturnPaths = new Set(['/', '/monitoring', '/platform']);
+const personalEmailDomains = new Set([
+  'gmail.com',
+  'googlemail.com',
+  'hotmail.com',
+  'outlook.com',
+  'live.com',
+  'yahoo.com',
+  'icloud.com',
+  'proton.me',
+  'protonmail.com',
+]);
 
 export type ProviderConfig = {
   enabled: boolean;
@@ -55,6 +66,18 @@ const defaultClientFactory: ClientFactory = async (_provider, config) => {
 
 const safeReturnTo = (value: unknown) =>
   typeof value === 'string' && allowedReturnPaths.has(value) ? value : '/';
+
+const organizationFromIdentity = (email: string, displayName: string) => {
+  const domain = email.split('@')[1]?.toLowerCase() ?? '';
+  if (!domain || personalEmailDomains.has(domain))
+    return `Organização de ${displayName}`.slice(0, 160);
+  const domainName = domain.split('.')[0] ?? domain;
+  const formatted = domainName
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase('pt-BR'))
+    .trim();
+  return (formatted || `Organização de ${displayName}`).slice(0, 160);
+};
 
 export const parseOAuthProvider = (value: string): ExternalIdentityProvider => {
   if (value === 'google') return 'GOOGLE';
@@ -200,6 +223,25 @@ export class OAuthService {
       },
       metadata,
     );
+    if (result.kind === 'ONBOARDING') {
+      const registered = await this.auth.completeExternalOnboarding(
+        result.completionToken,
+        {
+          name: displayName,
+          organizationName: organizationFromIdentity(claimedEmail, displayName),
+          timezone: 'UTC',
+        },
+        metadata,
+      );
+      logger.info('oauth.login.succeeded', { provider, outcome: 'REGISTERED' });
+      return {
+        kind: 'SESSION' as const,
+        user: registered.user,
+        membership: registered.membership,
+        tokens: registered.tokens,
+        returnTo: transaction.returnTo,
+      };
+    }
     logger.info('oauth.login.succeeded', { provider, outcome: result.kind });
     return { ...result, returnTo: transaction.returnTo };
   }

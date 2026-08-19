@@ -6,7 +6,9 @@ export type RealtimeTopic =
   | 'EVENT_CREATED'
   | 'DEVICE_STATUS_CHANGED'
   | 'ALERT_CHANGED'
-  | 'NOTIFICATION_CREATED';
+  | 'NOTIFICATION_CREATED'
+  | 'DISCOVERY_CHANGED'
+  | 'CAMERA_VERIFICATION_CHANGED';
 type Ticket = { userId: string; organizationId: string; expiresAt: number };
 type Client = { connectionId: string; userId: string; response: Response; expiresAt: number };
 const CONNECTION_TTL_MS = 15 * 60_000;

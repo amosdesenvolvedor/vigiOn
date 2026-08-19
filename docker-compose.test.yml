@@ -1,0 +1,19 @@
+services:
+  test-db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: vigion_test
+      MARIADB_USER: vigion_test
+      MARIADB_PASSWORD: vigion-test-only
+      MARIADB_ROOT_PASSWORD: vigion-test-root-only
+    ports:
+      - '127.0.0.1:13307:3306'
+    tmpfs:
+      - /var/lib/mysql:size=512m
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    security_opt:
+      - no-new-privileges:true

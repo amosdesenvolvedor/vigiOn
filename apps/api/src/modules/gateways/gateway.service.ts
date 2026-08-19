@@ -414,6 +414,11 @@ export class GatewayService {
   async pollCommands(auth: NonNullable<Express.Request['gatewayAuth']>) {
     const now = new Date();
     await this.prisma.gatewayCommand.updateMany({
+      where: { gatewayId: auth.gatewayId, organizationId: auth.organizationId,
+        type: 'CAMERA_REGISTER', status: { in: ['PENDING', 'DELIVERED'] }, expiresAt: { lte: now } },
+      data: { payload: Prisma.JsonNull },
+    });
+    await this.prisma.gatewayCommand.updateMany({
       where: {
         gatewayId: auth.gatewayId,
         organizationId: auth.organizationId,
@@ -485,6 +490,7 @@ export class GatewayService {
           status: success ? 'SUCCEEDED' : 'FAILED',
           result: { status: input.status, ...(input.details ? { details: input.details } : {}) },
           completedAt: new Date(),
+          ...(command.type === 'CAMERA_REGISTER' ? { payload: Prisma.JsonNull } : {}),
         },
       });
       if (command.cameraId && command.type === 'TEST_CAMERA')
@@ -562,7 +568,13 @@ export class GatewayService {
     console.info(
       JSON.stringify({
         event:
-          command.type === 'START_STREAM'
+          command.type === 'CAMERA_REGISTER'
+            ? success
+              ? 'camera_registration_gateway_ack'
+              : 'camera_registration_gateway_failed'
+            : command.type === 'CAMERA_DISCOVERY_START' || command.type === 'CAMERA_DISCOVERY_CANCEL'
+            ? 'discovery.command_acknowledged'
+            : command.type === 'START_STREAM'
             ? success
               ? 'stream.starting'
               : 'stream.failed'
