@@ -9,16 +9,20 @@ import { AiQuotaService } from './quota.service';
 import { sanitizeForAi, sanitizeText } from './sanitize';
 import { AI_SYSTEM_PROMPT } from './system-prompt';
 import { AiTools } from './ai-tools';
+import { aiMetrics } from './ai-metrics';
 
 export class AiSupportService {
   private readonly quota: AiQuotaService;
   constructor(private readonly prisma: PrismaClient, private readonly provider: AiProvider = new CloudflareWorkersAiProvider()) { this.quota = new AiQuotaService(prisma); }
 
   async chat(auth: AuthenticatedUser, input: { message: string; conversationId?: string }, metadata: RequestMetadata & { requestId?: string }) {
+    aiMetrics.requested();
     if (!env.AI_ENABLED) throw new AuthError(503, 'AI_DISABLED', 'O suporte inteligente está temporariamente indisponível.');
     const message = sanitizeText(input.message.trim(), env.AI_MAX_INPUT_CHARS);
     if (!message) throw new AuthError(400, 'AI_MESSAGE_REQUIRED', 'Informe uma mensagem.');
-    const remaining = await this.quota.consume(auth.userId, auth.organizationId);
+    let remaining: number;
+    try { remaining = await this.quota.consume(auth.userId, auth.organizationId); }
+    catch (error) { aiMetrics.failed(error instanceof AuthError && error.code === 'AI_QUOTA_EXCEEDED' ? 'QUOTA' : undefined); throw error; }
     const conversation = input.conversationId
       ? await this.prisma.aiConversation.findFirst({ where: { id: input.conversationId, organizationId: auth.organizationId, userId: auth.userId } })
       : await this.prisma.aiConversation.create({ data: { organizationId: auth.organizationId, userId: auth.userId, title: message.slice(0, 160) } });
@@ -57,8 +61,10 @@ export class AiSupportService {
         this.prisma.auditLog.create({ data: { organizationId: auth.organizationId, actorUserId: auth.userId, action: 'AI_SUPPORT_CHAT', entityType: 'AiConversation', entityId: conversation.id, metadata: { ...(metadata.requestId ? { requestId: metadata.requestId } : {}), provider: this.provider.name, model: env.AI_MODEL, toolsUsed, durationMs: Date.now() - started, status: 'SUCCESS', usage }, ...(metadata.ipAddress ? { ipAddress: metadata.ipAddress } : {}), ...(metadata.userAgent ? { userAgent: metadata.userAgent } : {}) } }),
       ]);
       logger.info('ai.request.completed', { requestId: metadata.requestId, userId: auth.userId, organizationId: auth.organizationId, conversationId: conversation.id, provider: this.provider.name, model: env.AI_MODEL, toolsUsed, durationMs: Date.now() - started });
+      aiMetrics.completed(Date.now() - started);
       return { conversationId: conversation.id, answer, toolsUsed, remainingToday: remaining };
     } catch (error) {
+      aiMetrics.failed(error instanceof AiProviderError ? error.code : undefined);
       logger.warn('ai.request.failed', { requestId: metadata.requestId, userId: auth.userId, organizationId: auth.organizationId, conversationId: conversation.id, provider: this.provider.name, durationMs: Date.now() - started, errorCode: error instanceof AiProviderError ? error.code : 'FAILED' });
       if (error instanceof AiProviderError) throw new AuthError(error.code === 'QUOTA' ? 429 : 503, error.code === 'QUOTA' ? 'AI_PROVIDER_QUOTA' : 'AI_UNAVAILABLE', error.code === 'QUOTA' ? 'O suporte inteligente atingiu o limite temporário de uso. Tente novamente mais tarde.' : 'O suporte inteligente está temporariamente indisponível. Os demais recursos do Vigion continuam funcionando normalmente.');
       throw error;

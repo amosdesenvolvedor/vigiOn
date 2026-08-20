@@ -5,6 +5,8 @@ import { env } from '../../config/env';
 import { prisma } from '../../lib/prisma';
 import { authenticate } from '../auth/auth.middleware';
 import { AiSupportService } from './ai-support.service';
+import { requirePlatformAdmin } from '../platform/platform.middleware';
+import { aiMetrics } from './ai-metrics';
 
 export const aiSupportRouter = Router();
 const service = new AiSupportService(prisma);
@@ -14,5 +16,6 @@ const metadata = (request: Request) => ({ requestId: String(request.res?.locals.
 
 aiSupportRouter.use(authenticate);
 aiSupportRouter.get('/status', async (request, response, next) => { try { response.json(await service.status(request.auth!)); } catch (error) { next(error); } });
+aiSupportRouter.get('/metrics', requirePlatformAdmin, (_request, response) => response.json(aiMetrics.snapshot()));
 aiSupportRouter.get('/conversations/:id', async (request, response, next) => { try { response.json({ conversation: await service.history(request.auth!, z.string().uuid().parse(request.params.id)) }); } catch (error) { next(error); } });
 aiSupportRouter.post('/chat', limiter, async (request, response, next) => { try { const input = chatSchema.parse(request.body); response.json(await service.chat(request.auth!, { message: input.message, ...(input.conversationId ? { conversationId: input.conversationId } : {}) }, metadata(request))); } catch (error) { next(error); } });
