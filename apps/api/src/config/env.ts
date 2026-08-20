@@ -62,6 +62,20 @@ const envSchema = z.object({
   STRIPE_PRICE_BUSINESS: optionalSecret(5),
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
   BILLING_RECONCILE_INTERVAL_SECONDS: z.coerce.number().int().min(60).max(86400).default(900),
+  AI_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  AI_PROVIDER: z.literal('cloudflare').default('cloudflare'),
+  AI_MODEL: z.string().min(1).default('@cf/qwen/qwen3-30b-a3b-fp8'),
+  AI_DAILY_REQUEST_LIMIT: z.coerce.number().int().min(1).max(10000).default(200),
+  AI_USER_DAILY_REQUEST_LIMIT: z.coerce.number().int().min(1).max(1000).default(10),
+  AI_ORG_DAILY_REQUEST_LIMIT: z.coerce.number().int().min(1).max(5000).default(30),
+  AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(32).max(1024).default(384),
+  AI_MAX_INPUT_CHARS: z.coerce.number().int().min(100).max(10000).default(2000),
+  AI_HISTORY_LIMIT: z.coerce.number().int().min(2).max(12).default(8),
+  AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(20000),
+  AI_CIRCUIT_FAILURE_THRESHOLD: z.coerce.number().int().min(1).max(20).default(3),
+  AI_CIRCUIT_RESET_MS: z.coerce.number().int().min(10000).max(3600000).default(60000),
+  CLOUDFLARE_ACCOUNT_ID: optionalSecret(20),
+  CLOUDFLARE_AI_API_TOKEN: optionalSecret(30),
   GOOGLE_AUTH_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   GOOGLE_CLIENT_ID: optionalSecret(3),
   GOOGLE_CLIENT_SECRET: optionalSecret(8),
@@ -94,6 +108,9 @@ if (parsed.success && parsed.data.BILLING_ENABLED) {
     console.error('Invalid Stripe configuration; missing variables:', missing.join(', '));
     throw new Error(`Stripe billing configuration is incomplete: ${missing.join(', ')}`);
   }
+}
+if (parsed.success && parsed.data.AI_ENABLED && (!parsed.data.CLOUDFLARE_ACCOUNT_ID || !parsed.data.CLOUDFLARE_AI_API_TOKEN)) {
+  throw new Error('Cloudflare Workers AI configuration is incomplete');
 }
 if (parsed.success && parsed.data.NODE_ENV === 'production' && !parsed.data.MFA_ENCRYPTION_KEY) {
   throw new Error('MFA_ENCRYPTION_KEY is required in production');

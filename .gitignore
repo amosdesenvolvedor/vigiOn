@@ -8,6 +8,8 @@ coverage/
 *.tsbuildinfo
 *.key
 *.key.pub
+*.gguf
+models/
 .DS_Store
 .idea/
 .vscode/

@@ -15,6 +15,7 @@ import { PrivacyPolicyPage } from './legal/PrivacyPolicyPage';
 import { TermsOfServicePage } from './legal/TermsOfServicePage';
 import { MfaEnrollment } from './auth/MfaEnrollment';
 import { BrandName } from './branding/BrandName';
+import { AiSupportPanel } from './ai-support/AiSupportPanel';
 
 function ProtectedArea() {
   const { user, organization, mfa, loading, logout } = useAuth();
@@ -95,6 +96,7 @@ function ProtectedArea() {
           <NotificationCenter />
         </div>
         <GatewayPanel />
+        <AiSupportPanel />
         <BillingPanel />
       </div>
       <nav

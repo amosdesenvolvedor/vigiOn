@@ -37,6 +37,7 @@ import {
 } from './modules/camera-onboarding/verification.routes';
 import { completionRouter } from './modules/camera-onboarding/completion.routes';
 import { gatewayCameraHealthRouter } from './modules/camera-health/camera-health.routes';
+import { aiSupportRouter } from './modules/ai-support/ai-support.routes';
 
 export const createApp = () => {
   const app = express();
@@ -89,6 +90,7 @@ export const createApp = () => {
   app.use('/api/v1/intelligence', intelligenceRouter);
   app.use('/api/v1/realtime', realtimeRouter);
   app.use('/api/v1/dashboard', dashboardRouter);
+  app.use('/api/v1/ai-support', aiSupportRouter);
   app.use('/api/v1/platform', platformRouter);
   app.use('/api/v1', streamRouter);
   app.use('/api/v1', mediaRouter);
